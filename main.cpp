@@ -240,6 +240,8 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
         while (finding_next_anchor) {
             int i=1, j=1, temp=0, grad_max=0;
             int direction_y=0,direction_x=0;
+            
+            //cout<<xpnt<<", "<<ypnt<<", "<< int(ed_canvas.at<uchar>(ypnt,xpnt))<<endl;
 
             ed_canvas.at<uchar>(ypnt,xpnt)=254;
             //exit conditions
@@ -252,8 +254,9 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
                  for(j=1; j>-2;j--){
                      if(!(i==0 && j==0)){
 
-                        // cout<<"ok! "<<i<<" "<<j<<" "<<ypnt<<" "<<xpnt <<endl;
                          temp= grad_map.at<uchar>(ypnt+i,xpnt+j);
+                         //cout<<"ok! "<<i<<" "<<j<<" "<<ypnt<<" "<<xpnt <<endl;
+
                          if ((grad_max < temp) && (ed_canvas.at<uchar>(ypnt+i,xpnt+j) != 254 ) ){
                              grad_max=temp;
                              direction_y = i;
