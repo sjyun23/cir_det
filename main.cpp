@@ -30,10 +30,10 @@ int main(){
 
     gaussian(input_gray_img,gauss_result);
     
-    int sobel_thr=80; //prewitt actually..
+    int sobel_thr=45; //prewitt actually..
     sobel(gauss_result, sob_result, nmr_result, grad_map, sobel_thr);
     
-    int anchor_thr=1, anch_detail_ratio=4;
+    int anchor_thr=1.7, anch_detail_ratio=4;
     Mat anch_canvas=ed_anchor_nfa(nmr_result, grad_map, anchor_thr, anch_detail_ratio );
 
     t2 = ((double)getTickCount() - t2) / getTickFrequency();
@@ -101,8 +101,8 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uch
     Mat mask_y = (Mat_<double>(3, 3) << 1, 1, 1,
                                         0, 0, 0,
                                         -1, -1, -1);
-
-    //mask for each direction  --sobel
+//
+//    //mask for each direction  --sobel
 //    Mat mask_x = (Mat_<double>(3, 3) << -1, 0, 1,
 //                                        -2, 0, 2,
 //                                        -1, 0, 1);
@@ -133,20 +133,17 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uch
                     dy += image.at<uchar>(yimage + ymask, ximage + xmask) * mask_y.at<double>(filterOffset + ymask, filterOffset + xmask);
                 }
             }
-
             gradient = sqrt(pow(dy, 2) + pow(dx, 2));
-
                 if (gradient>=255){
-                    gradient=254;
+                    gradient=255;
                 }
-                grd_map.at<uchar>(yimage - filterOffset, ximage - filterOffset) = gradient;
-
 
             //thresholding & non maxima suppression
             if (gradient > thresh){
                 sob_result.at<uchar>(yimage - filterOffset, ximage - filterOffset) = 255;
                 nmr_result.at<uchar>(yimage - filterOffset, ximage - filterOffset) = 255;
-
+                
+                grd_map.at<uchar>(yimage - filterOffset, ximage - filterOffset) = gradient;
 
                 if (yimage==0 || yimage==nmr_result.rows || ximage==0 || ximage==nmr_result.cols)
                 {break;}
@@ -175,6 +172,20 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uch
             }
         }
     }
+    nmr_result.row(1).setTo(Scalar(0));
+    nmr_result.row(nmr_result.rows-1).setTo(Scalar(0));
+    nmr_result.col(1).setTo(Scalar(0));
+    nmr_result.col(nmr_result.cols-1).setTo(Scalar(0));
+    
+    grd_map.row(1).setTo(Scalar(0));
+    grd_map.row(grd_map.rows-1).setTo(Scalar(0));
+    grd_map.col(1).setTo(Scalar(0));
+    grd_map.col(grd_map.cols-1).setTo(Scalar(0));
+    
+    sob_result.row(1).setTo(Scalar(0));
+    sob_result.row(sob_result.rows-1).setTo(Scalar(0));
+    sob_result.col(1).setTo(Scalar(0));
+    sob_result.col(sob_result.cols-1).setTo(Scalar(0));
 }
 
 Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int anch_detail_ratio ){
@@ -183,7 +194,7 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
     stack<int> y_st, x_st, length_st;
     stack<int> y_anc, x_anc;
     
-    //counting edges
+    //1st scan - counting edges
     Mat canvas;
     nmr_result.copyTo(canvas);
     int edge_length,edge_no=0;
@@ -199,7 +210,7 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
         }
     }
     
-    cout<<"edge number total "<<edge_no<<"edge l total  "<<total_edge_length<<endl;
+    cout<<"edge number total "<<edge_no<<"    edge total length "<<total_edge_length<<endl;
 
     Mat anch_canvas;
     nmr_result.copyTo(anch_canvas);
@@ -209,7 +220,6 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
             //check nfa condition
         if (((length_single_edge* edge_no)/ total_edge_length ) >= anchor_thr){
             find_edge_component(anch_canvas, y_st.top(), x_st.top(), 100);
-                
             if(y_st.top()%anch_detail_ratio==0){
                 y_anc.push(y_st.top());
                 x_anc.push(x_st.top());
@@ -217,7 +227,7 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
         }
         y_st.pop(); x_st.pop(); length_st.pop();
     }
-    
+
     //reducing anchors by detail ratio
     for(int i=0; i<anch_canvas.rows; i++){
         if(i%anch_detail_ratio!=0){
@@ -227,68 +237,62 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
     anch_canvas.setTo(0, anch_canvas == 255);
     anch_canvas.setTo(255, anch_canvas > 0);
     
+    
+    
+    
+    
     //edge drawing
-    Mat ed_canvas;
+    Mat ed_canvas, grad_canvas;
     anch_canvas.copyTo(ed_canvas);
 
-    while (!y_anc.empty()) {
-        bool finding_next_anchor=true;
-        int ypnt= y_anc.top(),xpnt= x_anc.top();
-        y_anc.pop();x_anc.pop();
-
-        int length=1;
-        while (finding_next_anchor) {
-            int i=1, j=1, temp=0, grad_max=0;
-            int direction_y=0,direction_x=0;
+    for(int yinit =0; yinit< ed_canvas.rows; yinit++){
+        for(int xinit =0; xinit< ed_canvas.cols; xinit++){
+            grad_map.copyTo(grad_canvas);
             
-            //cout<<xpnt<<", "<<ypnt<<", "<< int(ed_canvas.at<uchar>(ypnt,xpnt))<<endl;
-
-            ed_canvas.at<uchar>(ypnt,xpnt)=254;
-            //exit conditions
-            //escape from canvas
-            if (((ypnt) <= 0) || ((ypnt) >= ed_canvas.rows) || ((xpnt) <= 0) || (xpnt >= (ed_canvas.cols)) ){
-                finding_next_anchor = false;
-                break;
-            }
-            for(i=1; i >-2; i--){
-                 for(j=1; j>-2;j--){
-                     if(!(i==0 && j==0)){
-
-                         temp= grad_map.at<uchar>(ypnt+i,xpnt+j);
-                         //cout<<"ok! "<<i<<" "<<j<<" "<<ypnt<<" "<<xpnt <<endl;
-
-                         if ((grad_max < temp) && (ed_canvas.at<uchar>(ypnt+i,xpnt+j) != 254 ) ){
-                             grad_max=temp;
-                             direction_y = i;
-                             direction_x = j;
-                         }
-                     }
-                 }
-            }
-            ypnt=ypnt+direction_y;
-            xpnt=xpnt+direction_x;            
-            //exit conditions
-                //go back to came from
-            //    if (ed_canvas.at<uchar>(ypnt,xpnt)==250){
-            //        finding_next_anchor=false;
-            //    }
-                //or nowhere to go
-                //else
-                if(grad_max==0 ||(direction_x==0 && direction_y==0)){
-                                        if(length==2){
-                        cout<<grad_max<<endl;
+            int ypnt=yinit, xpnt=xinit;
+            bool finding_next_anchor = true;
+            if(ed_canvas.at<uchar>(ypnt,xpnt)==255){
+                while(finding_next_anchor==true){
+                    //found anchor point
+                    //drawing edge
+                    int i=1, j=1, temp=0, grad_max=0;
+                    int direction_y=0,direction_x=0;
+                    ed_canvas.at<uchar>(ypnt,xpnt)=254;
+                    
+                    if (((ypnt) <= 0) || ((ypnt) >= ed_canvas.rows) || ((xpnt) <= 0) || (xpnt >= (ed_canvas.cols)) ){
+                        finding_next_anchor = false;
+                        break;
                     }
-                    finding_next_anchor=false;
+                    for(i=1; i >-2; i--){
+                        for(j=1; j>-2;j--){
+                            if(!(i==0 && j==0)){
+                                temp= grad_canvas.at<uchar>(ypnt+i,xpnt+j);
+                                //cout<<"ok! "<<i<<" "<<j<<" "<<ypnt<<" "<<xpnt <<endl;
+                                    if ((grad_max < temp) && (ed_canvas.at<uchar>(ypnt+i,xpnt+j) != 254 ) ){
+                                        grad_max=temp;
+                                        direction_y = i;
+                                        direction_x = j;
+                                    }
+                                grad_canvas.at<uchar>(ypnt+i,xpnt+j)=0;
+                            }
+                        }
+                    }
+                    ypnt=ypnt+direction_y;
+                    xpnt=xpnt+direction_x;
+                    
+                    if(grad_max==0 ||(direction_x==0 && direction_y==0)){
+                        finding_next_anchor=false;
+                    }
+                    //if find next anchor
+                    else if (ed_canvas.at<uchar>(ypnt,xpnt)==255){
+                      //  ed_canvas.at<uchar>(ypnt,xpnt)=254;
+                        finding_next_anchor=false;
+                    }
+                    else{
+                        ed_canvas.at<uchar>(ypnt,xpnt)=254;
+                    }
                 }
-                //if find next anchor
-                else if (ed_canvas.at<uchar>(ypnt,xpnt)==255){
-                    ed_canvas.at<uchar>(ypnt,xpnt)=254;
-                    finding_next_anchor=false;
-                }
-                else{
-                    ed_canvas.at<uchar>(ypnt,xpnt)=254;
-                    length++;
-                }
+            }
         }
     }
     
