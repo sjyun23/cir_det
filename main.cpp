@@ -16,7 +16,7 @@ using namespace std;
 void gaussian(const Mat& input_gray_img, Mat& gauss_result);
 void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uchar thresh);
 int find_edge_component(Mat& canvas, int ypnt, int xpnt, int edge_no);
-Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int anch_detail_ratio );
+Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, Mat& anch_canvas, int anchor_thr, int anch_detail_ratio );
 
 
 int main(){
@@ -28,13 +28,16 @@ int main(){
 
     Mat gauss_result, sob_result, nmr_result, grad_map;
 
-    gaussian(input_gray_img,gauss_result);
+    //gaussian(input_gray_img,gauss_result);
+    GaussianBlur( input_gray_img, gauss_result, Size(5,5), 0, 0);
+
     
-    int sobel_thr=45; //prewitt actually..
+    int sobel_thr=25; //prewitt actually..
     sobel(gauss_result, sob_result, nmr_result, grad_map, sobel_thr);
     
-    int anchor_thr=1.7, anch_detail_ratio=4;
-    Mat anch_canvas=ed_anchor_nfa(nmr_result, grad_map, anchor_thr, anch_detail_ratio );
+    int anchor_thr=1, anch_detail_ratio=4;
+    Mat anch_canvas;
+    Mat edge_canvas=ed_anchor_nfa(nmr_result, grad_map, anch_canvas, anchor_thr, anch_detail_ratio );
 
     t2 = ((double)getTickCount() - t2) / getTickFrequency();
     cout << "time ptr =  " << t2 << " sec" << endl;
@@ -45,6 +48,7 @@ int main(){
     imshow("sobel/prewitt", sob_result);
     imshow("nonmaxima suppress", nmr_result);
     imshow("anch map", anch_canvas);
+    imshow("edge map", edge_canvas);
 
     waitKey(0);
     return 0;
@@ -98,9 +102,9 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uch
     Mat mask_x = (Mat_<double>(3, 3) << -1, 0, 1,
                                         -1, 0, 1,
                                         -1, 0, 1);
-    Mat mask_y = (Mat_<double>(3, 3) << 1, 1, 1,
+    Mat mask_y = (Mat_<double>(3, 3) << -1, -1, -1,
                                         0, 0, 0,
-                                        -1, -1, -1);
+                                        1, 1, 1);
 //
 //    //mask for each direction  --sobel
 //    Mat mask_x = (Mat_<double>(3, 3) << -1, 0, 1,
@@ -141,10 +145,9 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uch
             //thresholding & non maxima suppression
             if (gradient > thresh){
                 sob_result.at<uchar>(yimage - filterOffset, ximage - filterOffset) = 255;
-                nmr_result.at<uchar>(yimage - filterOffset, ximage - filterOffset) = 255;
-                
                 grd_map.at<uchar>(yimage - filterOffset, ximage - filterOffset) = gradient;
-
+            
+                nmr_result.at<uchar>(yimage - filterOffset, ximage - filterOffset) = 255;
                 if (yimage==0 || yimage==nmr_result.rows || ximage==0 || ximage==nmr_result.cols)
                 {break;}
                 int angle=atan2(dy,dx)*deg_factor;
@@ -188,7 +191,7 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uch
     sob_result.col(sob_result.cols-1).setTo(Scalar(0));
 }
 
-Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int anch_detail_ratio ){
+Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, Mat& anch_canvas, int anchor_thr, int anch_detail_ratio ){
     
     int total_edge_length = cv::countNonZero(nmr_result == 255);
     stack<int> y_st, x_st, length_st;
@@ -212,7 +215,7 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
     
     cout<<"edge number total "<<edge_no<<"    edge total length "<<total_edge_length<<endl;
 
-    Mat anch_canvas;
+    //Mat anch_canvas;
     nmr_result.copyTo(anch_canvas);
     //check NFA until edgestack empty
     while (!y_st.empty()) {
@@ -234,6 +237,15 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
             anch_canvas.row(i)=0;
         }
     }
+
+    //reducing anchors by detail ratio
+    for(int i=0; i<anch_canvas.cols; i++){
+        if(i%anch_detail_ratio!=0){
+            anch_canvas.col(i)=0;
+        }
+    }
+
+
     anch_canvas.setTo(0, anch_canvas == 255);
     anch_canvas.setTo(255, anch_canvas > 0);
     
@@ -244,22 +256,33 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
     //edge drawing
     Mat ed_canvas, grad_canvas;
     anch_canvas.copyTo(ed_canvas);
+    //nmr_result.copyTo(grad_canvas);
+    grad_map.copyTo(grad_canvas);
+
+
+    bool edge_c_toggle=true;
+    int edge_color=70;
 
     for(int yinit =0; yinit< ed_canvas.rows; yinit++){
         for(int xinit =0; xinit< ed_canvas.cols; xinit++){
-            grad_map.copyTo(grad_canvas);
             
             int ypnt=yinit, xpnt=xinit;
             bool finding_next_anchor = true;
             if(ed_canvas.at<uchar>(ypnt,xpnt)==255){
+
+                edge_color++;
+                if (edge_color==200 ){
+                    edge_color=70;
+                }
+
                 while(finding_next_anchor==true){
                     //found anchor point
                     //drawing edge
                     int i=1, j=1, temp=0, grad_max=0;
                     int direction_y=0,direction_x=0;
-                    ed_canvas.at<uchar>(ypnt,xpnt)=254;
+                    //ed_canvas.at<uchar>(ypnt,xpnt)=254;
                     
-                    if (((ypnt) <= 0) || ((ypnt) >= ed_canvas.rows) || ((xpnt) <= 0) || (xpnt >= (ed_canvas.cols)) ){
+                    if (((ypnt) <= 0) || ((ypnt) >= ed_canvas.rows) || ((xpnt) <= 0) || ((xpnt) >= ed_canvas.cols) ){
                         finding_next_anchor = false;
                         break;
                     }
@@ -268,7 +291,7 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
                             if(!(i==0 && j==0)){
                                 temp= grad_canvas.at<uchar>(ypnt+i,xpnt+j);
                                 //cout<<"ok! "<<i<<" "<<j<<" "<<ypnt<<" "<<xpnt <<endl;
-                                    if ((grad_max < temp) && (ed_canvas.at<uchar>(ypnt+i,xpnt+j) != 254 ) ){
+                                    if ((grad_max < temp) && (ed_canvas.at<uchar>(ypnt+i,xpnt+j) != edge_color ) ){
                                         grad_max=temp;
                                         direction_y = i;
                                         direction_x = j;
@@ -289,7 +312,7 @@ Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, int anchor_thr, int
                         finding_next_anchor=false;
                     }
                     else{
-                        ed_canvas.at<uchar>(ypnt,xpnt)=254;
+                        ed_canvas.at<uchar>(ypnt,xpnt)=edge_color;
                     }
                 }
             }
