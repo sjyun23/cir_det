@@ -14,8 +14,9 @@ using namespace cv;
 using namespace std;
 
 void gaussian(const Mat& input_gray_img, Mat& gauss_result);
-void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uchar thresh);
+void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, Mat& angle_map, uchar thresh);
 int find_edge_component(Mat& canvas, int ypnt, int xpnt, int edge_no);
+Mat edge_drawing(Mat& grad_map, Mat& angle_map, Mat& nmr_result, Mat& anch_canvas, int anchor_detail_ratio);
 Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, Mat& anch_canvas, int anchor_thr, int anch_detail_ratio );
 
 
@@ -23,29 +24,38 @@ int main(){
     double t2 = (double)getTickCount();
 
    //load img
-    Mat input_gray_img = imread("lena.jpg",IMREAD_GRAYSCALE);
+    //Mat input_gray_img = imread("lena.jpg",IMREAD_GRAYSCALE);
     //Mat input_gray_img = imread("drug.jpg",IMREAD_GRAYSCALE);
+    //Mat input_gray_img = imread("peppers.png",IMREAD_GRAYSCALE);
+    //Mat input_gray_img = imread("coins.jpg",IMREAD_GRAYSCALE);
 
-    Mat gauss_result, sob_result, nmr_result, grad_map;
+    Mat input_gray_img = imread("ex3.png",IMREAD_GRAYSCALE);
+    
+    
+    Mat gauss_result ;
 
     //gaussian(input_gray_img,gauss_result);
-    GaussianBlur( input_gray_img, gauss_result, Size(5,5), 0, 0);
+    GaussianBlur( input_gray_img, gauss_result, Size(5,5), 1, 1);
 
     
-    int sobel_thr=25; //prewitt actually..
-    sobel(gauss_result, sob_result, nmr_result, grad_map, sobel_thr);
-    
-    int anchor_thr=1, anch_detail_ratio=4;
+    int thr=30; //prewitt actually..
+    Mat angle_map,nmr_result, grad_map , sob_result;
+    sobel(gauss_result, sob_result, nmr_result, grad_map, angle_map, thr);
+
+    int anchor_detail_ratio=5;
     Mat anch_canvas;
-    Mat edge_canvas=ed_anchor_nfa(nmr_result, grad_map, anch_canvas, anchor_thr, anch_detail_ratio );
+    Mat edge_canvas=edge_drawing(grad_map, angle_map, nmr_result, anch_canvas, anchor_detail_ratio );
 
     t2 = ((double)getTickCount() - t2) / getTickFrequency();
     cout << "time ptr =  " << t2 << " sec" << endl;
     
-    imshow("gray", input_gray_img);
+   // imshow("gray", input_gray_img);
     imshow("gauss", gauss_result);
     imshow("gradient map", grad_map);
-    imshow("sobel/prewitt", sob_result);
+    
+   // imshow("angle map", angle_map);
+
+   // imshow("sobel/prewitt", sob_result);
     imshow("nonmaxima suppress", nmr_result);
     imshow("anch map", anch_canvas);
     imshow("edge map", edge_canvas);
@@ -97,7 +107,7 @@ void gaussian(const Mat& input_gray_img, Mat& g_result){
     g_result.col(g_result.cols-1).setTo(Scalar(0));
 }
 
-void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uchar thresh){
+void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, Mat& angle_map, uchar thresh){
     //mask for each direction --prewitt
     Mat mask_x = (Mat_<double>(3, 3) << -1, 0, 1,
                                         -1, 0, 1,
@@ -114,21 +124,21 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uch
 //                                        0, 0, 0,
 //                                        -1, -2, -1);
     
+    
+    
     int filterOffset = 3 / 2;
-
     sob_result = Mat::zeros(image.rows - filterOffset * 2, image.cols - filterOffset * 2, image.type());
     nmr_result = Mat::zeros(image.rows - filterOffset * 2, image.cols - filterOffset * 2, image.type());
     grd_map = Mat::zeros(image.rows - filterOffset * 2, image.cols - filterOffset * 2, image.type());
-
-    double dx;
-    double dy;
-    double gradient;
+    angle_map = Mat::zeros(image.rows - filterOffset * 2, image.cols - filterOffset * 2, image.type());
+    
+    double dx, dy;
+    double gradient, angle;
     const double deg_factor=57.2957; // 180/pi
     
     for (int yimage = filterOffset; yimage < image.rows - filterOffset; yimage++){
         for (int ximage = filterOffset; ximage < image.cols - filterOffset; ximage++){
-            dx = 0;
-            dy = 0;
+            dx = 0; dy = 0;
             for (int ymask = -filterOffset; ymask <= filterOffset; ymask++){
                 for (int xmask = -filterOffset; xmask <= filterOffset; xmask++){
                     //x
@@ -141,40 +151,56 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uch
                 if (gradient>=255){
                     gradient=255;
                 }
-
-            //thresholding & non maxima suppression
-            if (gradient > thresh){
-                sob_result.at<uchar>(yimage - filterOffset, ximage - filterOffset) = 255;
+            if(gradient >= thresh){
                 grd_map.at<uchar>(yimage - filterOffset, ximage - filterOffset) = gradient;
-            
-                nmr_result.at<uchar>(yimage - filterOffset, ximage - filterOffset) = 255;
-                if (yimage==0 || yimage==nmr_result.rows || ximage==0 || ximage==nmr_result.cols)
-                {break;}
-                int angle=atan2(dy,dx)*deg_factor;
+                sob_result.at<uchar>(yimage - filterOffset, ximage - filterOffset) = 255;
+
+                angle=atan2(dy,dx)*deg_factor;
                 angle= ((angle <0) ? (angle+180):angle);
-                //case0 angle0
-                if (((0 <= angle) && (angle < 22.5)) || ((157.5 <= angle) && (angle <= 180))){
-                    nmr_result.at<uchar>(yimage - filterOffset,ximage - filterOffset+1)=0;
-                    nmr_result.at<uchar>(yimage - filterOffset,ximage - filterOffset-1)=0;
-                }
-                //case1 angle45
-                else if (22.5 <= angle < 67.5){
-                    nmr_result.at<uchar>(yimage - filterOffset+1,ximage - filterOffset-1)=0;
-                    nmr_result.at<uchar>(yimage - filterOffset-1,ximage - filterOffset+1)=0;
-                }
-                //case2 angle90
-                else if (67.5 <= angle < 112.5){
-                    nmr_result.at<uchar>(yimage - filterOffset+1,ximage - filterOffset)=0;
-                    nmr_result.at<uchar>(yimage - filterOffset-1,ximage - filterOffset)=0;
-                }
-                //case3 angle 135
-                else if (112.5 <= angle < 157.5){
-                    nmr_result.at<uchar>(yimage - filterOffset-1,ximage - filterOffset-1)=0;
-                    nmr_result.at<uchar>(yimage - filterOffset+1,ximage - filterOffset+1)=0;
-                }
+                angle_map.at<uchar>(yimage-filterOffset,ximage-filterOffset)=angle;
             }
         }
     }
+    
+    //do Non-maxima suppression
+    for (int yimage = filterOffset; yimage < image.rows - filterOffset; yimage++){
+        for (int ximage = filterOffset; ximage < image.cols - filterOffset; ximage++){
+                //thresholding & non maxima suppression
+            gradient = grd_map.at<uchar>(yimage - filterOffset, ximage - filterOffset);
+            angle = angle_map.at<uchar>(yimage-filterOffset,ximage-filterOffset);
+            if(gradient >= thresh){
+                double neighbor0=0 , neighbor1=0;
+                //case0 angle0
+                if (((0 <= angle) && (angle < 22.5)) || ((157.5 <= angle) && (angle <= 180))){
+                    neighbor0 = grd_map.at<uchar>(yimage - filterOffset,ximage - filterOffset+1);
+                    neighbor1 = grd_map.at<uchar>(yimage - filterOffset,ximage - filterOffset-1);
+                }
+                //case1 angle45
+                else if ((22.5 <= angle) && (angle < 67.5)){
+                    neighbor0 = grd_map.at<uchar>(yimage - filterOffset+1,ximage - filterOffset-1);
+                    neighbor1 = grd_map.at<uchar>(yimage - filterOffset-1,ximage - filterOffset+1);
+                }
+                //case2 angle90
+                else if ((67.5 <= angle) && (angle < 112.5)){
+                    neighbor0 = grd_map.at<uchar>(yimage - filterOffset+1,ximage - filterOffset);
+                    neighbor1 = grd_map.at<uchar>(yimage - filterOffset-1,ximage - filterOffset);
+                }
+                //case3 angle 135
+                else if ((112.5 <= angle) && (angle < 157.5)){
+                    neighbor0 = grd_map.at<uchar>(yimage - filterOffset-1,ximage - filterOffset-1);
+                    neighbor1 = grd_map.at<uchar>(yimage - filterOffset+1,ximage - filterOffset+1);
+                }
+
+                if (gradient >= neighbor0 && gradient >=neighbor1){
+                    nmr_result.at<uchar>(yimage - filterOffset, ximage - filterOffset)= gradient;
+                }else{
+                    nmr_result.at<uchar>(yimage - filterOffset, ximage - filterOffset)=0;
+                }
+                
+            }
+        }
+    }
+    
     nmr_result.row(1).setTo(Scalar(0));
     nmr_result.row(nmr_result.rows-1).setTo(Scalar(0));
     nmr_result.col(1).setTo(Scalar(0));
@@ -184,143 +210,192 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, uch
     grd_map.row(grd_map.rows-1).setTo(Scalar(0));
     grd_map.col(1).setTo(Scalar(0));
     grd_map.col(grd_map.cols-1).setTo(Scalar(0));
-    
-    sob_result.row(1).setTo(Scalar(0));
-    sob_result.row(sob_result.rows-1).setTo(Scalar(0));
-    sob_result.col(1).setTo(Scalar(0));
-    sob_result.col(sob_result.cols-1).setTo(Scalar(0));
 }
 
-Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, Mat& anch_canvas, int anchor_thr, int anch_detail_ratio ){
-    
-    int total_edge_length = cv::countNonZero(nmr_result == 255);
-    stack<int> y_st, x_st, length_st;
-    stack<int> y_anc, x_anc;
-    
-    //1st scan - counting edges
-    Mat canvas;
-    nmr_result.copyTo(canvas);
-    int edge_length,edge_no=0;
-    for(int i=0 ; i <nmr_result.rows; i++ ){
-        for(int j=0 ; j <nmr_result.cols; j++ ){
-            if (canvas.at<uchar>(i,j)==255){
-                edge_length=find_edge_component(canvas, i, j, 100);
-                y_st.push(i);
-                x_st.push(j);
-                length_st.push(edge_length);
-                edge_no++;
-            }
-        }
-    }
-    
-    cout<<"edge number total "<<edge_no<<"    edge total length "<<total_edge_length<<endl;
 
-    //Mat anch_canvas;
+
+Mat edge_drawing(Mat& grad_map, Mat& angle_map, Mat& nmr_result, Mat& anch_canvas, int anchor_detail_ratio){
+    Mat ed_canvas = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
     nmr_result.copyTo(anch_canvas);
-    //check NFA until edgestack empty
-    while (!y_st.empty()) {
-        int length_single_edge= length_st.top();
-            //check nfa condition
-        if (((length_single_edge* edge_no)/ total_edge_length ) >= anchor_thr){
-            find_edge_component(anch_canvas, y_st.top(), x_st.top(), 100);
-            if(y_st.top()%anch_detail_ratio==0){
-                y_anc.push(y_st.top());
-                x_anc.push(x_st.top());
-            }
-        }
-        y_st.pop(); x_st.pop(); length_st.pop();
-    }
-
-    //reducing anchors by detail ratio
+    
+    //reducing anchors by detail ratio  by rows
     for(int i=0; i<anch_canvas.rows; i++){
-        if(i%anch_detail_ratio!=0){
+        if(i%anchor_detail_ratio!=0){
             anch_canvas.row(i)=0;
         }
     }
-
-    //reducing anchors by detail ratio
+    //reducing anchors by detail ratio  by cols
     for(int i=0; i<anch_canvas.cols; i++){
-        if(i%anch_detail_ratio!=0){
+        if(i%anchor_detail_ratio!=0){
             anch_canvas.col(i)=0;
         }
     }
 
-
-    anch_canvas.setTo(0, anch_canvas == 255);
     anch_canvas.setTo(255, anch_canvas > 0);
     
-    
-    
-    
-    
-    //edge drawing
-    Mat ed_canvas, grad_canvas;
-    anch_canvas.copyTo(ed_canvas);
-    //nmr_result.copyTo(grad_canvas);
-    grad_map.copyTo(grad_canvas);
-
-
-    bool edge_c_toggle=true;
     int edge_color=70;
-
-    for(int yinit =0; yinit< ed_canvas.rows; yinit++){
-        for(int xinit =0; xinit< ed_canvas.cols; xinit++){
-            
-            int ypnt=yinit, xpnt=xinit;
-            bool finding_next_anchor = true;
-            if(ed_canvas.at<uchar>(ypnt,xpnt)==255){
-
-                edge_color++;
-                if (edge_color==200 ){
+    int anch_color=255;
+    int ypnt, xpnt,temp,grad_max, direction_y, direction_x;
+    int idx_y[3]={0}, idx_x[3]={0};
+    double angle;
+    bool finding_next_anchor;
+    
+    for(int yinit = 1 ; yinit< anch_canvas.rows; yinit++){
+        for(int xinit =1; xinit< anch_canvas.cols; xinit++){
+            if(anch_canvas.at<uchar>(yinit,xinit)==anch_color){
+                if (edge_color > 250){
                     edge_color=70;
                 }
+                edge_color = edge_color+10;
+                
 
+                
+                //next step
+                finding_next_anchor = true;
+                ypnt=yinit;
+                xpnt=xinit;
+                
+                //cout<<"test"<<endl;
+                //cout<<ypnt<<"   "<<xpnt<<endl;
+                
                 while(finding_next_anchor==true){
-                    //found anchor point
-                    //drawing edge
-                    int i=1, j=1, temp=0, grad_max=0;
-                    int direction_y=0,direction_x=0;
-                    //ed_canvas.at<uchar>(ypnt,xpnt)=254;
                     
-                    if (((ypnt) <= 0) || ((ypnt) >= ed_canvas.rows) || ((xpnt) <= 0) || ((xpnt) >= ed_canvas.cols) ){
-                        finding_next_anchor = false;
-                        break;
+                    //check direction
+                    angle = angle_map.at<uchar>(ypnt, xpnt);
+                    //case0 angle0
+                    if (((0 <= angle) && (angle < 22.5)) || ((157.5 <= angle) && (angle <= 180))){
+                        idx_y[0] = 1;     idx_x[0] = 1;
+                        idx_y[1] = 1;     idx_x[1] = 0;
+                        idx_y[2] = 1;     idx_x[2] = -1;
                     }
-                    for(i=1; i >-2; i--){
-                        for(j=1; j>-2;j--){
-                            if(!(i==0 && j==0)){
-                                temp= grad_canvas.at<uchar>(ypnt+i,xpnt+j);
-                                //cout<<"ok! "<<i<<" "<<j<<" "<<ypnt<<" "<<xpnt <<endl;
-                                    if ((grad_max < temp) && (ed_canvas.at<uchar>(ypnt+i,xpnt+j) != edge_color ) ){
-                                        grad_max=temp;
-                                        direction_y = i;
-                                        direction_x = j;
-                                    }
-                                grad_canvas.at<uchar>(ypnt+i,xpnt+j)=0;
-                            }
+                    //case1 angle45
+                    else if ((22.5 <= angle) && (angle < 67.5)){
+                         idx_y[0] = 1;    idx_x[0] = -1;
+                         idx_y[1] = 1;    idx_x[1] = 0;
+                         idx_y[2] = 0;    idx_x[2] = -1;
+                    }
+                     //case2 angle90
+                    else if ((67.5 <= angle) && (angle < 112.5)){
+                         idx_y[0] = -1;    idx_x[0] = 1;
+                         idx_y[1] = 0;     idx_x[1] = 1;
+                         idx_y[2] = 1;     idx_x[2] = 1;
+                    }
+                     //case3 angle 135
+                    else if ((112.5 <= angle) && (angle < 157.5)){
+                         idx_y[0] = 1;     idx_x[0] = 0;
+                         idx_y[1] = 1;     idx_x[1] = 1;
+                         idx_y[2] = 0;     idx_x[2] = 1;
+                    }
+                     
+                    grad_max=0;
+                    temp=0;
+                    direction_y=0;
+                    direction_x=0;
+                    for (int i = 0; i<3; i++){
+                        temp=grad_map.at<uchar>(ypnt+idx_y[i], xpnt+idx_x[i]);
+                        if (grad_max < temp){
+                            grad_max=temp;
+                            direction_y = idx_y[i];
+                            direction_x = idx_x[i];
                         }
                     }
                     ypnt=ypnt+direction_y;
                     xpnt=xpnt+direction_x;
                     
-                    if(grad_max==0 ||(direction_x==0 && direction_y==0)){
+//                    if(direction_x==0 && direction_y==0){
+//                        finding_next_anchor=false;
+//                        break;
+//                    }
+                    
+                    if(ed_canvas.at<uchar>(ypnt, xpnt)>0){
                         finding_next_anchor=false;
+                        break;
                     }
-                    //if find next anchor
-                    else if (ed_canvas.at<uchar>(ypnt,xpnt)==255){
-                      //  ed_canvas.at<uchar>(ypnt,xpnt)=254;
-                        finding_next_anchor=false;
-                    }
-                    else{
-                        ed_canvas.at<uchar>(ypnt,xpnt)=edge_color;
+                    
+                    ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
+                    ed_canvas.at<uchar>(yinit,xinit)=edge_color;
+                    
+                    if(anch_canvas.at<uchar>(ypnt, xpnt)==255){
+                        ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
+                        //finding_next_anchor=false;
                     }
                 }
-            }
-        }
-    }
+                
+                //step before
+                finding_next_anchor = true;
+                ypnt=yinit;
+                xpnt=xinit;
+            
+                while(finding_next_anchor==true){
+                    
+                    //check direction
+                    angle = angle_map.at<uchar>(ypnt, xpnt);
+                    //case0 angle0
+                    if (((0 <= angle) && (angle < 22.5)) || ((157.5 <= angle) && (angle <= 180))){
+                        idx_y[0] = -1;     idx_x[0] = 1;
+                        idx_y[1] = -1;     idx_x[1] = 0;
+                        idx_y[2] = -1;     idx_x[2] = -1;
+                    }
+                    //case1 angle45
+                    else if ((22.5 <= angle) && (angle < 67.5)){
+                        idx_y[0] = -1;    idx_x[0] = 1;
+                        idx_y[1] = -1;     idx_x[1] = 0;
+                        idx_y[2] = 0;     idx_x[2] =1;
+                                  
+                    }
+                     //case2 angle90
+                    else if ((67.5 <= angle) && (angle < 112.5)){
+                         idx_y[0] = -1;    idx_x[0] = -1;
+                         idx_y[1] = 0;     idx_x[1] = -1;
+                         idx_y[2] = 1;     idx_x[2] = -1;
+                    }
+                     //case3 angle 135
+                    else if ((112.5 <= angle) && (angle < 157.5)){
+                         idx_y[0] = -1;    idx_x[0] = 0;
+                         idx_y[1] = -1;    idx_x[1] = -1;
+                         idx_y[2] = 0;    idx_x[2] = -1;
+                    }
+                    
+                    grad_max=0;
+                    temp=0;
+                    direction_y=0;
+                    direction_x=0;
+                    for (int i = 0; i<3; i++){
+                        temp=grad_map.at<uchar>(ypnt+idx_y[i], xpnt+idx_x[i]);
+                        if (grad_max < temp){
+                            grad_max=temp;
+                            direction_y = idx_y[i];
+                            direction_x = idx_x[i];
+                        }
+                    }
+                    ypnt=ypnt+direction_y;
+                    xpnt=xpnt+direction_x;
     
+//                    if(direction_x==0 && direction_y==0){
+//                        finding_next_anchor=false;
+//                        break;
+//                    }
+                    
+                    if(ed_canvas.at<uchar>(ypnt, xpnt)>0){
+                        finding_next_anchor=false;
+                        break;
+                    }
+                    
+                    ed_canvas.at<uchar>(ypnt,xpnt)= edge_color-20;
+                    ed_canvas.at<uchar>(yinit,xinit)=edge_color;
+                    
+                    if(anch_canvas.at<uchar>(ypnt, xpnt)==255){
+                        ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
+                       // finding_next_anchor=false;
+                    }
+                } // while
+            }// if
+        }// for inner
+    }//for outer
     return ed_canvas;
 }
+
+
 
 int find_edge_component(Mat& canvas, int ypnt, int xpnt, int edge_no){
     //find edge
