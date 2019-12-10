@@ -46,16 +46,18 @@ int main(){
     t2 = ((double)getTickCount() - t2) / getTickFrequency();
     cout << "time ptr =  " << t2 << " sec" << endl;
     
-   // imshow("gray", input_gray_img);
-    imshow("gauss", gauss_result);
+    //imshow("gray", input_gray_img);
+    //imshow("gauss", gauss_result);
     imshow("gradient map", grad_map);
     
-    imshow("angle map", angle_map);
+    //imshow("angle map", angle_map);
 
-   // imshow("sobel/prewitt", sob_result);
-    imshow("nonmaxima suppress", nmr_result);
-    imshow("anch map", anch_canvas);
+    //imshow("sobel/prewitt", sob_result);
+    //imshow("nonmaxima suppress", nmr_result);
+    //imshow("anch map", anch_canvas);
     imshow("edge map", edge_canvas);
+    imshow("edge-angle map", edge_angle_map);
+
 
     waitKey(0);
     return 0;
@@ -252,18 +254,14 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                 xpnt=xinit;
                 direction_from_y=0;
                 direction_from_x=0;
-                
+                ed_canvas.at<uchar>(yinit,xinit)=255;
+
                 while(finding_next_anchor==true){
                    
                     //check direction
                     angle = double(angle_map.at<uchar>(ypnt, xpnt));
 
-//                    int probey=438;
-//                    int probex=746;
-//                    int probey_next= 442;
-//                    int probex_next=747;
-
-                     //case0 angle0
+                    //case0 angle0
                     if (((0 <= angle) && (angle < 22.5)) || ((157.5 <= angle) && (angle <= 180))){
                         idx_y[0] = 1;     idx_x[0] = 1;
                         idx_y[1] = 1;     idx_x[1] = 0;
@@ -341,8 +339,6 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                                 direction_x = idx_x[i];
                             }
                         }
-                        //grad_map.at<uchar>(ytemp,xtemp)=0;
-
                     }
 /* 
 if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
@@ -368,13 +364,13 @@ if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
                         break;
                     } */
 
-                    //found next anchor -pass
+                    //found next anchor -- keep going and remove point from anch canvas
                     if(anch_canvas.at<uchar>(ypnt, xpnt)==255){
-                     /*    //ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
-                        finding_next_anchor=false;
-                        break; */
+                        anch_canvas.at<uchar>(ypnt, xpnt)==0;
+                        ed_canvas.at<uchar>(ypnt,xpnt)= 255;
                     }
-                        
+
+                    //if head meets tail, stops    
                     if(ed_canvas.at<uchar>(ypnt, xpnt)==edge_color){
                         finding_next_anchor=false;
                         if (length<=2){
@@ -383,28 +379,27 @@ if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
                         break;
                     }
 
-                    //overwrite existing points
-                    if(ed_canvas.at<uchar>(ypnt, xpnt)>0){
-                  /*       ed_canvas.at<uchar>(ypnt,xpnt)= 252;
+                    //overwrite existing points -no
+                    /* if(ed_canvas.at<uchar>(ypnt, xpnt)>0){
+                        ed_canvas.at<uchar>(ypnt,xpnt)= 252;
                         finding_next_anchor=false;
-                        break; */
-                    }
+                        break;
+                    } */
                     
-                    //mark start point 
-                    if(length==1){
-                        ed_canvas.at<uchar>(yinit,xinit)=255;}
+
                     //make pixel to edge
                     ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
+                    edge_angle_map.at<uchar>(ypnt,xpnt)=angle_map.at<uchar>(ypnt,xpnt);
                     length++;                
                 }// while
-                if (length>3){
+              /*   if (length>3){
                     cout<<"line no : "<<line_no+1<<"   length : "<<length<<endl;
                     line_no++;
-                }
+                } */
             }// if
         }// for inner
     }//for outer
-    cout<<"total line no "<<line_no<<endl;
+    //cout<<"total line no "<<line_no<<endl;
     return ed_canvas;
 }
 
