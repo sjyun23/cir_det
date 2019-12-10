@@ -410,31 +410,43 @@ Mat edCircle(Mat& edge_map, Mat& edge_angle_map ){
     edge_map.copyTo(edge_canvas);
     circle_map = Mat::zeros(edge_map.rows, edge_map.cols, edge_map.type());
     
-    bool canvas_outside;
-    int yinit, xinit, ypnt, xpnt;
+    bool canvas_outside, finding;
+    int yinit, xinit, ypnt, xpnt, edge_color;
 
     for(int yinit; yinit<edge_map.rows; yinit++){
         for(int xpnt; xpnt<edge_map.cols; xpnt++){
-            ypnt=yinit;
-            xpnt=xinit;
+
+            //find edge point
+            edge_color=edge_canvas.at<uchar>(ypnt,xpnt);
+            if(edge_color>0){
+                ypnt=yinit;
+                xpnt=xinit;
+                finding=true;
+
+                //find arcs from edge
+                while(finding){
+
+                    if ((ypnt < 0) || (ypnt >= edge_canvas.rows) || (xpnt < 0) || (xpnt >= (edge_canvas.cols)) ){
+                        canvas_outside==true;
+                        break;
+                    }
+
+                    for(int i=1; i>-2; i++){
+
+                       for(int j=1; j>-2; j++){
+                           
+                       } 
+                    }
 
 
 
-            //loop until no point left
-                        
-            if ((ypnt < 0) || (ypnt >= edge_canvas.rows) || (xpnt < 0) || (xpnt >= (edge_canvas.cols)) ){
-                canvas_outside==true;
-                break;
+
+
+
+                }
             }
-
-
-
-
-
-
         }        
     }
-
 
     return circle_map;
 }
