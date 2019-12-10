@@ -1,0 +1,6 @@
+
+xhost local:root
+
+docker run -v ${PWD}:/home/sandbox -v /tmp/.X11-unix:/tmp/.X11-unix:rw -v /dev/snd:/dev/snd -e DISPLAY=unix$DISPLAY -p 5000:5000 -p 8888:8888 -it sjyun23/ubuntu-opencv /bin/bash
+
+g++ -o test main.cpp $(pkg-config opencv --libs --cflags) -std=c++11 && ./test

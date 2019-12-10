@@ -16,8 +16,7 @@ using namespace std;
 void gaussian(const Mat& input_gray_img, Mat& gauss_result);
 void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, Mat& angle_map, uchar thresh);
 int find_edge_component(Mat& canvas, int ypnt, int xpnt, int edge_no);
-Mat edge_drawing(Mat& grad_map, Mat& angle_map, Mat& nmr_result, Mat& anch_canvas, int anchor_detail_ratio);
-Mat ed_anchor_nfa(const Mat& nmr_result,const Mat& grad_map, Mat& anch_canvas, int anchor_thr, int anch_detail_ratio );
+Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_map, Mat& edge_angle_map, int anchor_detail_ratio);
 
 
 int main(){
@@ -41,8 +40,8 @@ int main(){
     sobel(gauss_result, sob_result, nmr_result, grad_map, angle_map, thr);
 
     int anchor_detail_ratio=4;
-    Mat anch_canvas;
-    Mat edge_canvas=edge_drawing(grad_map, angle_map, nmr_result, anch_canvas, anchor_detail_ratio );
+    Mat anch_canvas, edge_angle_map;
+    Mat edge_canvas=edge_drawing(grad_map, nmr_result, anch_canvas, angle_map, edge_angle_map, anchor_detail_ratio );
 
     t2 = ((double)getTickCount() - t2) / getTickFrequency();
     cout << "time ptr =  " << t2 << " sec" << endl;
@@ -121,8 +120,6 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, Mat
 //    Mat mask_y = (Mat_<double>(3, 3) << 1, 2, 1,
 //                                        0, 0, 0,
 //                                        -1, -2, -1);
-    
-    
     
     int filterOffset = 3 / 2;
     sob_result = Mat::zeros(image.rows - filterOffset * 2, image.cols - filterOffset * 2, image.type());
@@ -210,8 +207,11 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, Mat
     grd_map.col(grd_map.cols-1).setTo(Scalar(0));
 }
 
-Mat edge_drawing(Mat& grad_map, Mat& angle_map, Mat& nmr_result, Mat& anch_canvas, int anchor_detail_ratio){
+Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_map, Mat& edge_angle_map, int anchor_detail_ratio){
+
     Mat ed_canvas = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
+    edge_angle_map = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
+
     nmr_result.copyTo(anch_canvas);
     //reducing anchors by detail ratio  by rows
     for(int i=0; i<anch_canvas.rows; i++){
@@ -235,9 +235,6 @@ Mat edge_drawing(Mat& grad_map, Mat& angle_map, Mat& nmr_result, Mat& anch_canva
     int idx_y[6]={0}, idx_x[6]={0};
     double angle;
     bool finding_next_anchor;
-
-    Mat grad_canvas;
-    grad_map.copyTo(grad_canvas);
     
     for(int yinit = 1 ; yinit< anch_canvas.rows; yinit++){
         for(int xinit =1; xinit< anch_canvas.cols; xinit++){
@@ -320,7 +317,7 @@ Mat edge_drawing(Mat& grad_map, Mat& angle_map, Mat& nmr_result, Mat& anch_canva
                     for (int i = 0; i<6; i++){
                         ytemp=ypnt+idx_y[i];
                         xtemp=xpnt+idx_x[i];
-                        temp_grad=grad_canvas.at<uchar>(ytemp,xtemp);
+                        temp_grad=grad_map.at<uchar>(ytemp,xtemp);
 
 /* if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
     cout<<idx_y[i]<<"  " <<idx_x[i]<<endl;
@@ -344,13 +341,13 @@ Mat edge_drawing(Mat& grad_map, Mat& angle_map, Mat& nmr_result, Mat& anch_canva
                                 direction_x = idx_x[i];
                             }
                         }
-                        //grad_canvas.at<uchar>(ytemp,xtemp)=0;
+                        //grad_map.at<uchar>(ytemp,xtemp)=0;
 
                     }
 /* 
 if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
     cout<<"ypnt is "<< ypnt<<" xpnt is " << xpnt<<endl;
-    cout <<"current grad is "<< int(grad_canvas.at<uchar>(ypnt,xpnt))<<endl;
+    cout <<"current grad is "<< int(grad_map.at<uchar>(ypnt,xpnt))<<endl;
     cout <<"next grad is "<< grad_max<<endl;
     cout <<"direction for y is "<< direction_y<<" direction for x is "<< direction_x<<endl;
     cout <<"edge color is "<< edge_color<<endl<<endl;
@@ -361,19 +358,17 @@ if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
                     direction_from_y=direction_y*-1;
                     direction_from_x=direction_x*-1;
 
-
                     /* if((direction_x==0 && direction_y==0) || grad_max==0){
                         finding_next_anchor=false;
                         ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
                         if (length>=2){
                             ed_canvas.at<uchar>(yinit,xinit)=edge_color;
                             ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
-                        }
-                        
+                        }                        
                         break;
                     } */
 
-                    //found next anchor
+                    //found next anchor -pass
                     if(anch_canvas.at<uchar>(ypnt, xpnt)==255){
                      /*    //ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
                         finding_next_anchor=false;
@@ -382,26 +377,29 @@ if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
                         
                     if(ed_canvas.at<uchar>(ypnt, xpnt)==edge_color){
                         finding_next_anchor=false;
+                        if (length<=2){
+                            ed_canvas.at<uchar>(yinit,xinit)=0;
+                        }
                         break;
                     }
 
+                    //overwrite existing points
                     if(ed_canvas.at<uchar>(ypnt, xpnt)>0){
                   /*       ed_canvas.at<uchar>(ypnt,xpnt)= 252;
                         finding_next_anchor=false;
                         break; */
                     }
                     
+                    //mark start point 
                     if(length==1){
                         ed_canvas.at<uchar>(yinit,xinit)=255;}
-                    
+                    //make pixel to edge
                     ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
-                    //grad_canvas.at<uchar>(ypnt,xpnt)=0;
-                    length++;
-                
+                    length++;                
                 }// while
-                if (length>10){
-                cout<<length<<endl;
-                line_no++;
+                if (length>3){
+                    cout<<"line no : "<<line_no+1<<"   length : "<<length<<endl;
+                    line_no++;
                 }
             }// if
         }// for inner
@@ -409,7 +407,6 @@ if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
     cout<<"total line no "<<line_no<<endl;
     return ed_canvas;
 }
-
 
 
 int find_edge_component(Mat& canvas, int ypnt, int xpnt, int edge_no){
@@ -452,46 +449,3 @@ int find_edge_component(Mat& canvas, int ypnt, int xpnt, int edge_no){
 }
 
 
-
-/* 
-
-                     //case0 angle0
-                    if (((0 <= angle) && (angle < 22.5)) || ((157.5 <= angle) && (angle <= 180))){
-                        idx_y[0] = 1;     idx_x[0] = 0;
-                        idx_y[1] = -1;    idx_x[1] = 0;
-                        idx_y[2] = 1;     idx_x[2] = 1;
-                        idx_y[3] = 1;     idx_x[3] = -1;
-                        idx_y[4] = -1;    idx_x[4] = 1;
-                        idx_y[5] = -1;    idx_x[5] = -1;
-                    }
-                    //case1 angle45
-                    else if ((22.5 <= angle) && (angle < 67.5)){
-                        idx_y[0] = 1;    idx_x[0] = -1;
-                        idx_y[1] = -1;   idx_x[1] = 1;
-                        idx_y[2] = 1;    idx_x[2] = 0;
-                        idx_y[3] = 0;    idx_x[3] = -1;
-                        idx_y[4] = -1;   idx_x[4] = 0;
-                        idx_y[5] = 0;    idx_x[5] = 1;
-
-                    }
-                     //case2 angle90
-                    else if ((67.5 <= angle) && (angle < 112.5)){
-                        idx_y[0] = 0;     idx_x[0] = 1;
-                        idx_y[1] = 0;     idx_x[1] = -1;
-                        idx_y[2] = -1;    idx_x[2] = 1;
-                        idx_y[3] = 1;     idx_x[3] = 1;
-                        idx_y[4] = -1;    idx_x[4] = -1;
-                        idx_y[5] = 1;     idx_x[5] = -1;
-
-                    }
-                     //case3 angle 135
-                    else if ((112.5 <= angle) && (angle < 157.5)){
-                        idx_y[0] = 1;     idx_x[0] = 1;
-                        idx_y[1] = -1;    idx_x[1] = -1;
-                        idx_y[2] = 1;     idx_x[2] = 0;
-                        idx_y[3] = 0;     idx_x[3] = 1;
-                        idx_y[4] = -1;    idx_x[4] = 0;
-                        idx_y[5] = 0;     idx_x[5] = -1;
-                    }
-                     
- */
