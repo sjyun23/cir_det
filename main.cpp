@@ -29,29 +29,30 @@ int main(){
     //Mat input_gray_img = imread("coins.jpg",IMREAD_GRAYSCALE);
     Mat input_gray_img = imread("circle2.jpg",IMREAD_GRAYSCALE);
     
-    Mat gauss_result ;
-
+    Mat gauss_result;
     //gaussian(input_gray_img,gauss_result);
     GaussianBlur( input_gray_img, gauss_result, Size(5,5), 1, 1);
-
     
+    //sharpen
     int thr=20; //prewitt actually..
     Mat angle_map,nmr_result, grad_map , sob_result;
     sobel(gauss_result, sob_result, nmr_result, grad_map, angle_map, thr);
 
+    //edpf
     int anchor_detail_ratio=4;
     Mat anch_canvas, edge_angle_map;
-    Mat edge_canvas=edge_drawing(grad_map, nmr_result, anch_canvas, angle_map, edge_angle_map, anchor_detail_ratio );
+    Mat edge_canvas=edge_drawing(grad_map, nmr_result, anch_canvas, angle_map, edge_angle_map, anchor_detail_ratio);
+
+    //edcircle
+
 
     t2 = ((double)getTickCount() - t2) / getTickFrequency();
     cout << "time ptr =  " << t2 << " sec" << endl;
     
     //imshow("gray", input_gray_img);
-    //imshow("gauss", gauss_result);
+    //imshow("gaussian", gauss_result);
     imshow("gradient map", grad_map);
-    
     //imshow("angle map", angle_map);
-
     //imshow("sobel/prewitt", sob_result);
     //imshow("nonmaxima suppress", nmr_result);
     //imshow("anch map", anch_canvas);
@@ -232,7 +233,8 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
     
     int edge_color=70;
     int anch_color=255;
-    int ypnt, xpnt, ytemp, xtemp, temp_grad, grad_max, direction_y, direction_x, direction_from_y, direction_from_x;
+    int ypnt, xpnt, ytemp, xtemp, temp_grad, grad_max;
+    int direction_y, direction_x, direction_from_y, direction_from_x;
     int length, line_no=0;
     int idx_y[6]={0}, idx_x[6]={0};
     double angle;
@@ -402,6 +404,43 @@ if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
     //cout<<"total line no "<<line_no<<endl;
     return ed_canvas;
 }
+
+Mat edCircle(Mat& edge_map, Mat& edge_angle_map ){
+    Mat circle_map, edge_canvas;
+    edge_map.copyTo(edge_canvas);
+    circle_map = Mat::zeros(edge_map.rows, edge_map.cols, edge_map.type());
+    
+    bool canvas_outside;
+    int yinit, xinit, ypnt, xpnt;
+
+    for(int yinit; yinit<edge_map.rows; yinit++){
+        for(int xpnt; xpnt<edge_map.cols; xpnt++){
+            ypnt=yinit;
+            xpnt=xinit;
+
+
+
+            //loop until no point left
+                        
+            if ((ypnt < 0) || (ypnt >= edge_canvas.rows) || (xpnt < 0) || (xpnt >= (edge_canvas.cols)) ){
+                canvas_outside==true;
+                break;
+            }
+
+
+
+
+
+
+        }        
+    }
+
+
+    return circle_map;
+}
+
+
+
 
 
 int find_edge_component(Mat& canvas, int ypnt, int xpnt, int edge_no){
