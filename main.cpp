@@ -40,12 +40,12 @@ int main(){
     sobel(gauss_result, sob_result, nmr_result, grad_map, angle_map, thr);
 
     //edpf
-    int anchor_detail_ratio=4;
+    int anchor_detail_ratio=2;
     Mat anch_canvas, edge_angle_map;
     Mat edge_result=edge_drawing(grad_map, nmr_result, anch_canvas, angle_map, edge_angle_map, anchor_detail_ratio);
 
     //edcircle
-    edCircle(edge_result, edge_angle_map);
+    //edCircle(edge_result, edge_angle_map);
 
     t2 = ((double)getTickCount() - t2) / getTickFrequency();
 
@@ -216,6 +216,8 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
 
     Mat ed_canvas = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
     edge_angle_map = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
+    Mat circle_map = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
+
 
     nmr_result.copyTo(anch_canvas);
     //reducing anchors by detail ratio  by rows
@@ -241,6 +243,9 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
     int idx_y[6]={0}, idx_x[6]={0};
     double angle;
     bool finding_next_anchor;
+    int dy;
+                    stack<int>ystack;
+                stack<int>xstack;
     
     for(int yinit = anchor_detail_ratio ; yinit< anch_canvas.rows; yinit=yinit+anchor_detail_ratio){
         for(int xinit =anchor_detail_ratio; xinit< anch_canvas.cols; xinit=xinit+anchor_detail_ratio){
@@ -260,6 +265,8 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                 direction_from_x=0;
                 //anch_color=edge_color;
                 ed_canvas.at<uchar>(yinit,xinit)=anch_color;
+
+
 
                 while(finding_next_anchor==true){
                    
@@ -315,27 +322,12 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                         break;
                     }
 
-//int y1=300, x1=504, y0= 299, x0=486;
 
                     for (int i = 0; i<6; i++){
                         ytemp=ypnt+idx_y[i];
                         xtemp=xpnt+idx_x[i];
                         temp_grad=grad_map.at<uchar>(ytemp,xtemp);
 
-/* if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
-    cout<<idx_y[i]<<"  " <<idx_x[i]<<endl;
-    cout<<temp_grad<<endl;
-    cout << "y from " <<direction_from_y<<" xfrom"<< direction_from_x<< endl;
-    if ( (direction_from_y != idx_y[i])) {
-        cout <<"true"<<endl;
-    }
-    else {cout<<"false"<<endl;}
-
-    if ( ((direction_from_x) != idx_x[i]) ){
-        cout <<"true"<<endl;
-    }
-    else {cout<<"false"<<endl;}
-} */
                         if (  (direction_from_y != idx_y[i]) || ((direction_from_x) != idx_x[i]) ){
 
                             if (grad_max < temp_grad){
@@ -345,31 +337,11 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                             }
                         }
                     }
-/* 
-if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
-    cout<<"ypnt is "<< ypnt<<" xpnt is " << xpnt<<endl;
-    cout <<"current grad is "<< int(grad_map.at<uchar>(ypnt,xpnt))<<endl;
-    cout <<"next grad is "<< grad_max<<endl;
-    cout <<"direction for y is "<< direction_y<<" direction for x is "<< direction_x<<endl;
-    cout <<"edge color is "<< edge_color<<endl<<endl;
-} */
 
                     ypnt=ypnt+direction_y;
                     xpnt=xpnt+direction_x;
-                    direction_from_y=direction_y*-1;
-                    direction_from_x=direction_x*-1;
 
-                    /* if((direction_x==0 && direction_y==0) || grad_max==0){
-                        finding_next_anchor=false;
-                        ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
-                        if (length>=2){
-                            ed_canvas.at<uchar>(yinit,xinit)=edge_color;
-                            ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
-                        }                        
-                        break;
-                    } */
-
-                    //if head meets tail, stops    
+                    //if head meets tail, stop.    
                     if(ed_canvas.at<uchar>(ypnt, xpnt)==edge_color){
                         finding_next_anchor=false;
                         if (length<=2){
@@ -380,8 +352,8 @@ if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
 
                     //found next anchor -- keep going and remove point from anch canvas
                     if(anch_canvas.at<uchar>(ypnt, xpnt)==255){
-                        anch_canvas.at<uchar>(ypnt, xpnt)=0;
-                        ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
+                        //anch_canvas.at<uchar>(ypnt, xpnt)=0;
+                        //ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
                         
                     }
 
@@ -391,191 +363,99 @@ if (ypnt >= y0 && xpnt >= x0 &&  y1 >= ypnt && x1 >= xpnt  ){
                         finding_next_anchor=false;
                         break;
                     } */
-                    
 
                     //make pixel to edge
                     ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
                     edge_angle_map.at<uchar>(ypnt,xpnt)=angle_map.at<uchar>(ypnt,xpnt);
-                    length++;                
+
+                    length++;
+                    
+                    ystack.push(ypnt);
+                    xstack.push(xpnt);
+
+
+                    direction_from_y=direction_y*-1;
+                    direction_from_x=direction_x*-1;
+
                 }// while
-              /*   if (length>3){
-                    cout<<"line no : "<<line_no+1<<"   length : "<<length<<endl;
-                    line_no++;
-                } */
+
+                if(length>3){
+
+                    int yarray[ystack.size()];
+                    int xarray[xstack.size()];
+                    double angle_delta_array[ystack.size()];
+                    stack<int>breakpoint;
+
+                    int stack_size = ystack.size();
+
+                    for(int i=0; i<stack_size; i++){
+                        yarray[i]=ystack.top();
+                        xarray[i]=xstack.top();
+                        //circle_map.at<uchar>(yarray[i],xarray[i])=255;
+                        if(i>1){
+                            angle_delta_array[i]=angle_map.at<uchar>(yarray[i],xarray[i])-angle_map.at<uchar>(yarray[i-1],xarray[i-1]);
+                        }else{
+                            angle_delta_array[0]=0.0;
+                        }
+
+                        if (fabs(angle_delta_array[i]) >3){
+                            angle_delta_array[i]=255;
+                            breakpoint.push(i);
+                        }
+                        ystack.pop();
+                        xstack.pop();
+                    }
+
+                    int br_size=breakpoint.size();
+                    int br_array[br_size];
+                    double delta_mean_arr[br_size];
+                    double accum, delta_mean;
+
+                    //accum delta angle between breakpoint 
+                    for(int i=0; i<br_size; i++){
+                        br_array[i]=breakpoint.top();
+                        breakpoint.pop();
+                        if (i>=1){
+                            if((br_array[i-1]-br_array[i]) >5){
+                                accum=0.0;
+                                for(int j=br_array[i]+1; j<(br_array[i-1]); j++ ){
+                                    accum+=angle_delta_array[j];
+                                    //cout<<angle_delta_array[j]<<endl;
+
+//circle_map.at<uchar>(yarray[j],xarray[j])=255;
+//cout<<yarray[j]<<"  "<<xarray[j]<<endl;
+//cout<<angle_delta_array[br_array[i]]<<endl;
+
+                                }
+                                cout<<"qq"<<endl;                               
+                                //cout<<(accum/(br_array[i-1]-br_array[i]))<<endl;
+                                delta_mean_arr[i]=accum/(br_array[i-1]-br_array[i]);
+                                cout<<delta_mean_arr[i]<<endl;
+
+                                for(int j=br_array[i]+1; j<(br_array[i-1]); j++ ){
+                                    //double dev=pow((angle_delta_array[j]-delta_mean),2)/(br_array[i-1]-br_array[i]);
+                                    if (delta_mean_arr[i] == delta_mean_arr[i-1] ){
+                                    circle_map.at<uchar>(yarray[j],xarray[j])=255;
+                                    }
+
+                                    //cout<<dev<<endl;
+
+                                    
+                                                               
+                                } 
+                            }
+                        }
+                    }
+                }
+                cout<<"edge end"<<endl;
             }// if
         }// for inner
     }//for outer
     //cout<<"total line no "<<line_no<<endl;
-    return ed_canvas;
-}
-
-Mat edCircle(Mat& edge_map, Mat& edge_angle_map ){
-    Mat circle_map, edge_canvas;
-    edge_map.copyTo(edge_canvas);
-    circle_map = Mat::zeros(edge_map.rows, edge_map.cols, edge_map.type());
-    
-    bool finding_arcs, finding_small_arc, found_next_point;
-    int ypnt, xpnt ;
-    int center_y=0, center_x=0, radius=0;
-    int edge_color;
-    int temp_color, temp_arc_lenth, angle_constraint = 45;
-    double angle_low, angle_high;
-    double temp_angle, edge_angle;
-    const double deg_factor=57.2957; // 180/pi
-
-   
-    for(int yinit=0; yinit<edge_map.rows; yinit++){
-        for(int xinit=0; xinit<edge_map.cols; xinit++){
-
-            ypnt=yinit;
-            xpnt=xinit;
-            edge_color=edge_canvas.at<uchar>(ypnt,xpnt);
-
-            if(edge_color>0){
-                finding_arcs=true;
-                //find edge point
-                //edge_canvas.at<uchar>(ypnt,xpnt)=0;
-
-                //find arcs from same edge color     ref= y80 x167
-                temp_arc_lenth=1;
-                for(int qq=0 ; 100000 > qq; qq++){//while(finding_arcs){
-                    if ((ypnt < 0) || (ypnt >= edge_canvas.rows) || (xpnt < 0) || (xpnt >= (edge_canvas.cols)) ){
-                        finding_arcs=false;
-                        break;
-                    }
-                    
-                    //if pointer is not on edge
-                    if(edge_color != edge_canvas.at<uchar>(ypnt,xpnt)){
-                        finding_arcs=false;
-                        break;
-                    }
-                    
-                    edge_angle=edge_angle_map.at<uchar>(ypnt,xpnt);
-
-                    // find a single small arc in theta constraint
-                    finding_small_arc=true;
-                    temp_arc_lenth=1;
-                    while(finding_small_arc){
-
-                        if ((ypnt < 0) || (ypnt >= edge_canvas.rows) || (xpnt < 0) || (xpnt >= (edge_canvas.cols)) ){
-                            finding_small_arc=false;
-                            break;
-                        }
-
-                        found_next_point=false;
-
-                        for(int i=1; i>-2; i--){
-                            for(int j=1; j>-2; j--){
-                                temp_color = edge_canvas.at<uchar>(ypnt+i,xpnt+j);
-                                temp_angle = edge_angle_map.at<uchar>(ypnt+i,xpnt+j);
-
-                                if(temp_color== edge_color){
-                                    angle_high=edge_angle+angle_constraint;
-                                    angle_low=edge_angle-angle_constraint;
-
-                                    if( angle_high>=180 && temp_angle < angle_constraint ){
-                                        temp_angle = temp_angle+180;
-                                    }
-                                    if(angle_low <0 && temp_angle > angle_constraint ){
-                                        temp_angle = temp_angle-180;
-                                    }
-
-                                    if(temp_angle>= angle_low && temp_angle<= angle_high ){
-                                        edge_canvas.at<uchar>(ypnt+i,xpnt+j)=0;
-                                        ypnt = ypnt + i;
-                                        xpnt = xpnt + j;
-                                        temp_arc_lenth++;
-                                        found_next_point=true;
-                                    }
-                                }
-                            } 
-                        }
-
-                        if(found_next_point==false){
-                            finding_small_arc=false;
-                        }
-
-
-                    }
-                    uchar cy;
-                    uchar cx;
-                    if (temp_arc_lenth>3){
-                        //calculate r
-                        radius = temp_arc_lenth * deg_factor * (1/edge_angle) ;
-                        center_y = ypnt + radius * sin(edge_angle);
-                        center_x = xpnt - radius * cos(edge_angle);
-                        cy=center_y;
-                        cx=center_x;
-                    }
-                    
-
-                    if (center_x>0 && center_y>0 && center_y < edge_canvas.rows && center_y <edge_canvas.cols && radius > 30 ){
-                        //edge_map.col(center_x)=255;
-                        //edge_map.row(center_y)=255;
-                        edge_map.at<uchar>(center_y,center_x)=200;
-                        /* 
-                        edge_map.at<uchar>(cy-1,cx)=255;
-                        edge_map.at<uchar>(cy+1,cx)=255;
-                        edge_map.at<uchar>(cy,cx+1)=255;
-                        edge_map.at<uchar>(cy,cx-1)=255; */
-
-
-                    }
-                    
-                   /*  edge_map.at<uchar>(edge_canvas.rows/2,edge_canvas.cols/2)=255;
-                    edge_map.at<uchar>(edge_canvas.rows/2-1,edge_canvas.cols/2)=255;
-                    edge_map.at<uchar>(edge_canvas.rows/2+1,edge_canvas.cols/2)=255;
-                    cout<< int(edge_canvas.rows/2)<<endl;
-                    cout<< int(edge_canvas.cols/2)<<endl; */
-                }//while(finding_arcs)
-            }
-        }        
-    }
-
     return circle_map;
 }
 
 
 
-
-
-int find_edge_component(Mat& canvas, int ypnt, int xpnt, int edge_no){
-    //find edge
-    int edge_length=1;
-    bool end_of_edge=false;
-    canvas.at<uchar>(ypnt, xpnt)=254;
-   
-    //finding edge elements
-    while (end_of_edge==false){
-        int i=1, j=1;
-        bool find_flag=false;
-        for(i=1; i >-2; i--){
-            for(j=1; j>-2;j--){
-                ypnt=ypnt+i;
-                xpnt=xpnt+j;
-                    //and if not on the canvas -> exit
-                    if (((ypnt) < 0) || ((ypnt) >= canvas.rows) || ((xpnt) < 0) || (xpnt >= (canvas.cols)) ){
-                        break;
-                    }
-                    //if new point is bright
-                    else if (canvas.at<uchar>(ypnt, xpnt)==255 && (i!=0 && j!=0) ){
-                        edge_length++;
-                        canvas.at<uchar>(ypnt, xpnt)=edge_no;
-                        find_flag=true;
-                        break;
-                    }
-            }
-            if (find_flag==true){
-                break;
-            }
-        }
-        //cannot find any or outside of canvas
-        if (((i==-2 && j==-2) && find_flag==false) || (ypnt < 0) || (ypnt >= canvas.rows) || (xpnt < 0) || (xpnt >= canvas.cols)){
-            end_of_edge = true;
-            break;
-        }
-    }
-    return edge_length;
-}
 
 
