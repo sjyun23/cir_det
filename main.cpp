@@ -16,7 +16,7 @@ using namespace std;
 void gaussian(const Mat& input_gray_img, Mat& gauss_result);
 void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, Mat& angle_map, uchar thresh);
 int find_edge_component(Mat& canvas, int ypnt, int xpnt, int edge_no);
-Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_map, Mat& edge_angle_map, Mat& circle_map, int anchor_detail_ratio);
+Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_map, Mat& edge_angle_map, Mat& circle_map, int anchor_detail_ratio, double circle_threshold);
 Mat edCircle(Mat& edge_map, Mat& edge_angle_map );
 
 
@@ -28,7 +28,8 @@ int main(){
     //Mat input_gray_img = imread("drug.jpg",IMREAD_GRAYSCALE);
     //Mat input_gray_img = imread("peppers.png",IMREAD_GRAYSCALE);
     //Mat input_gray_img = imread("coins.jpg",IMREAD_GRAYSCALE);
-    Mat input_gray_img = imread("circle2.jpg",IMREAD_GRAYSCALE);
+    //Mat input_gray_img = imread("circle2.jpg",IMREAD_GRAYSCALE);
+    Mat input_gray_img = imread("Circles.jpg",IMREAD_GRAYSCALE);
     
     Mat gauss_result;
     //gaussian(input_gray_img,gauss_result);
@@ -41,8 +42,9 @@ int main(){
 
     //edpf
     int anchor_detail_ratio=3;
+    double circle_threshold=0.5;
     Mat anch_canvas, edge_angle_map, circle_map;
-    Mat edge_result=edge_drawing(grad_map, nmr_result, anch_canvas, angle_map, edge_angle_map, circle_map, anchor_detail_ratio);
+    Mat edge_result=edge_drawing(grad_map, nmr_result, anch_canvas, angle_map, edge_angle_map, circle_map, anchor_detail_ratio, circle_threshold);
 
     //edcircle
     //edCircle(edge_result, edge_angle_map);
@@ -214,7 +216,7 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, Mat
     grd_map.col(grd_map.cols-1).setTo(Scalar(0));
 }
 
-Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_map, Mat& edge_angle_map, Mat& circle_map, int anchor_detail_ratio){
+Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_map, Mat& edge_angle_map, Mat& circle_map, int anchor_detail_ratio, double circle_threshold){
 
     Mat ed_canvas = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
     edge_angle_map = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
@@ -383,20 +385,18 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                     direction_from_x=direction_x*-1;
 
                 }// while
-
+                    //check length
                 if(ystack_line.size()>5){
                     int stack_size=ystack_line.size();
                     int xpnt, ypnt, xpnt_before, ypnt_before;
                     int delta;
 
-                    int peakpoint=0;
                     int arc_length=0;
-                    int arc_length_constraint=1;
 
                     int segment_table[stack_size][3];
                     stack<int>angle_index;
 
-
+                    //get line elements from stack and put in array
                     for(int i =0 ; i<stack_size ; i++){
                         segment_table[i][0]=ystack_line.top();
                         ystack_line.pop();
@@ -409,66 +409,114 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                             ypnt_before= segment_table[i-1][0];
                             xpnt_before= segment_table[i-1][1];
 
+                            //make a table of line sequence and collect angle information for arcs and lines
                             delta=abs(angle_map.at<uchar>(ypnt,xpnt)-angle_map.at<uchar>(ypnt_before,xpnt_before));
                             if (delta> 170){
                                 delta=abs(180-delta);
                             }                                 
-                            //line
-                            if (2>delta ){
-                                //circle_map.at<uchar>(ypnt,xpnt)=200;
+                            //line 
+                            if (4>delta ){  //was  2>delta ){
+                                //circle_map.at<uchar>(ypnt,xpnt)=200; //to test
                                 segment_table[i][2]=0;
                             //angle    
-                            }else if (15>delta ){
+                            }else if (15>delta ){    //was 15>delta ){
                                 //circle_map.at<uchar>(ypnt,xpnt)=125;
                                 segment_table[i][2]=1;
-                                if (segment_table[i-1][2]==0){
-                                    angle_index.push(i);
-                                }
-
-                            //out    
+                                angle_index.push(i);
+                                
+                            //out   too big to for an angle or line 
                             }else{
                                 segment_table[i][2]=2;
-                                angle_index.push(i);                                   
+                                angle_index.push(i); 
                             }
                         }  
                         
-                    }//for arc segment
-                    
-                    const int list_size = angle_index.size();
+                    }//for 
+
+                    int list_size = angle_index.size();
+                    if (list_size > 0){
+                        if(angle_index.top()==(stack_size-1) ){
+                            angle_index.pop();
+                            list_size--;
+                        }
+                    }
+
                     int dy, dx, idx;
                     int old_idx=0;
                     double length_list[list_size];
                     double angle_list[list_size];
+                    double angle_accum=0.0, angle_delta_mean=0;
+        
+                    //extract edge element(arc or line) from table
+                    //get length(or radius) and angle diff(start-end)
+                    for(int i =list_size ; i>=0 ; i--){
 
-
-                    for(int i =list_size ; i>1 ; i--){
                         if (i==list_size){
-                            old_idx=angle_index.top();
-                            angle_index.pop();
+                            old_idx=stack_size-1;//angle_index.top();
+                            //angle_index.pop();
                         }
-                    
-                        idx= angle_index.top();
-                        angle_index.pop();
+                        if (i>0){ 
+                            idx= angle_index.top();
+                            angle_index.pop();
+                            
+                        }else if(i==0){
+                            idx=0;
+                        }
 
-                        angle_list[i]=angle_map.at<uchar>(segment_table[idx][0],segment_table[idx][1])-angle_map.at<uchar>(segment_table[old_idx][0],segment_table[old_idx][1]);
+                        if((old_idx-idx)== 1){
+                            old_idx=idx;
 
-                       // cout<< i <<" " <<list_size<<" "<<idx<<" "<<old_idx<<endl;
-                        
-                        for (int j=idx; j<old_idx; j++){
+                            if(!angle_index.empty()){
+                                idx= angle_index.top();
+                                angle_index.pop();
+                                i--;
+                            }
+                            else{
+                                idx=0;
+                                break;
+                            }
+                        }
+
+                        //angle_list[i]=angle_map.at<uchar>(segment_table[idx][0],segment_table[idx][1])-angle_map.at<uchar>(segment_table[old_idx][0],segment_table[old_idx][1]);
+
+                        //cout<<endl<<endl<<endl<< i <<" " <<list_size<<endl;
+                        angle_accum=0.0;
+                        for (int j=(idx+1); j<old_idx; j++){
                             dy=segment_table[j][0]-segment_table[j+1][0];
                             dx=segment_table[j][1]-segment_table[j+1][1];
                             length_list[i]+=sqrt(pow(dx,2)+pow(dy,2));
-                            
+                            if (j>0){
+                                
+                                delta=(angle_map.at<uchar>(segment_table[j][0],segment_table[j][1])-angle_map.at<uchar>(segment_table[j-1][0],segment_table[j-1][1]));
+
+                                if (abs(delta)> 170){
+                                    delta=abs(180-delta);
+                                 } 
+                                 if (1)//delta>0)
+                                //{cout<<delta<<"  "<<idx<<"  "<<old_idx<<"            "<<j<<endl;}
+                                angle_accum+=abs(delta);
+                            }
                             //cout<<segment_table[j][0]<<"    "<<segment_table[j][1]<<endl;                        
                         }
+
+                        angle_delta_mean =angle_accum/(old_idx-idx);
+                        for (int j=(idx+1); j<old_idx; j++){
+
+                           /*  if(segment_table[j][1]==444 && segment_table[j][0]==176){
+                                cout<<angle_delta_mean<< "   " <<old_idx <<" "  <<idx <<endl;
+                            }
+ */
+                            if (fabs(angle_delta_mean)< 10 && fabs(angle_delta_mean)>circle_threshold  ){ //circle_threshold ){
+                                circle_map.at<uchar>(segment_table[j][0],segment_table[j][1])=200;
+                            }
+                        }
                         old_idx=idx;
-
-                        cout<<length_list[i]<<"                 "<<angle_list[i]<<endl;
-
                     }
-                                    cout<<"next"<<endl<<endl;
+                
 
-                }// if stack empty?   
+                                   //if (stack_size>0){ cout<<"next"<<endl<<endl;}
+
+                }// if stack empty   
 
             }// if
         }// for inner
