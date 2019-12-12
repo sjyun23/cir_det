@@ -16,7 +16,7 @@ using namespace std;
 void gaussian(const Mat& input_gray_img, Mat& gauss_result);
 void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, Mat& angle_map, uchar thresh);
 int find_edge_component(Mat& canvas, int ypnt, int xpnt, int edge_no);
-Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_map, Mat& edge_angle_map, Mat& circle_map, int anchor_detail_ratio);
+Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_map, Mat& edge_angle_map, int anchor_detail_ratio);
 Mat edCircle(Mat& edge_map, Mat& edge_angle_map );
 
 
@@ -40,9 +40,9 @@ int main(){
     sobel(gauss_result, sob_result, nmr_result, grad_map, angle_map, thr);
 
     //edpf
-    int anchor_detail_ratio=3;
-    Mat anch_canvas, edge_angle_map, circle_map;
-    Mat edge_result=edge_drawing(grad_map, nmr_result, anch_canvas, angle_map, edge_angle_map, circle_map, anchor_detail_ratio);
+    int anchor_detail_ratio=2;
+    Mat anch_canvas, edge_angle_map;
+    Mat edge_result=edge_drawing(grad_map, nmr_result, anch_canvas, angle_map, edge_angle_map, anchor_detail_ratio);
 
     //edcircle
     //edCircle(edge_result, edge_angle_map);
@@ -60,8 +60,6 @@ int main(){
     //imshow("anch map", anch_canvas);
     imshow("edge map", edge_result);
     imshow("edge-angle map", edge_angle_map);
-    imshow("circle map", circle_map);
-
 
 
     waitKey(0);
@@ -214,11 +212,11 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, Mat
     grd_map.col(grd_map.cols-1).setTo(Scalar(0));
 }
 
-Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_map, Mat& edge_angle_map, Mat& circle_map, int anchor_detail_ratio){
+Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_map, Mat& edge_angle_map, int anchor_detail_ratio){
 
     Mat ed_canvas = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
     edge_angle_map = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
-    circle_map = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
+    Mat circle_map = Mat::zeros(nmr_result.rows, nmr_result.cols, nmr_result.type());
 
 
     nmr_result.copyTo(anch_canvas);
@@ -245,8 +243,9 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
     int idx_y[6]={0}, idx_x[6]={0};
     double angle;
     bool finding_next_anchor;
-                                int cnt=0;
-
+    int dy;
+                    stack<int>ystack;
+                stack<int>xstack;
     
     for(int yinit = anchor_detail_ratio ; yinit< anch_canvas.rows; yinit=yinit+anchor_detail_ratio){
         for(int xinit =anchor_detail_ratio; xinit< anch_canvas.cols; xinit=xinit+anchor_detail_ratio){
@@ -264,14 +263,10 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                 xpnt=xinit;
                 direction_from_y=0;
                 direction_from_x=0;
-                
                 //anch_color=edge_color;
-                //ed_canvas.at<uchar>(yinit,xinit)=anch_color;
+                ed_canvas.at<uchar>(yinit,xinit)=anch_color;
 
-                stack<int>ystack_line;
-                stack<int>xstack_line;
-                stack<int>ystack_angle;
-                stack<int>xstack_angle;
+
 
                 while(finding_next_anchor==true){
                    
@@ -356,125 +351,108 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                     }
 
                     //found next anchor -- keep going and remove point from anch canvas
-                    /* if(anch_canvas.at<uchar>(ypnt, xpnt)==255){
+                    if(anch_canvas.at<uchar>(ypnt, xpnt)==255){
                         //anch_canvas.at<uchar>(ypnt, xpnt)=0;
                         //ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
                         
-                     }*/
+                    }
 
-                     //overwrite existing points -no
-                    if(ed_canvas.at<uchar>(ypnt, xpnt)>0){
-                        //cout<<int(ed_canvas.at<uchar>(ypnt, xpnt))<<endl;
-                        //ed_canvas.at<uchar>(ypnt,xpnt)= 252;
+                    //overwrite existing points -no
+                    /* if(ed_canvas.at<uchar>(ypnt, xpnt)>0){
+                        ed_canvas.at<uchar>(ypnt,xpnt)= 252;
                         finding_next_anchor=false;
                         break;
-                    } 
+                    } */
 
                     //make pixel to edge
                     ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
                     edge_angle_map.at<uchar>(ypnt,xpnt)=angle_map.at<uchar>(ypnt,xpnt);
 
-                    ystack_line.push(ypnt);
-                    xstack_line.push(xpnt);
-
                     length++;
+                    
+                    ystack.push(ypnt);
+                    xstack.push(xpnt);
+
 
                     direction_from_y=direction_y*-1;
                     direction_from_x=direction_x*-1;
 
                 }// while
 
-                if(ystack_line.size()>5){
-                    int stack_size=ystack_line.size();
-                    int xpnt, ypnt, xpnt_before, ypnt_before;
-                    int delta;
+                if(length>3){
 
-                    int peakpoint=0;
-                    int arc_length=0;
-                    int arc_length_constraint=1;
+                    int yarray[ystack.size()];
+                    int xarray[xstack.size()];
+                    double angle_delta_array[ystack.size()];
+                    stack<int>breakpoint;
 
-                    int segment_table[stack_size][3];
-                    stack<int>angle_index;
+                    int stack_size = ystack.size();
 
-
-                    for(int i =0 ; i<stack_size ; i++){
-                        segment_table[i][0]=ystack_line.top();
-                        ystack_line.pop();
-                        segment_table[i][1]=xstack_line.top();
-                        xstack_line.pop();
-
-                        if (i>0){
-                            ypnt= segment_table[i][0];
-                            xpnt= segment_table[i][1];
-                            ypnt_before= segment_table[i-1][0];
-                            xpnt_before= segment_table[i-1][1];
-
-                            delta=abs(angle_map.at<uchar>(ypnt,xpnt)-angle_map.at<uchar>(ypnt_before,xpnt_before));
-                            if (delta> 170){
-                                delta=abs(180-delta);
-                            }                                 
-                            //line
-                            if (2>delta ){
-                                //circle_map.at<uchar>(ypnt,xpnt)=200;
-                                segment_table[i][2]=0;
-                            //angle    
-                            }else if (15>delta ){
-                                //circle_map.at<uchar>(ypnt,xpnt)=125;
-                                segment_table[i][2]=1;
-                                if (segment_table[i-1][2]==0){
-                                    angle_index.push(i);
-                                }
-
-                            //out    
-                            }else{
-                                segment_table[i][2]=2;
-                                angle_index.push(i);                                   
-                            }
-                        }  
-                        
-                    }//for arc segment
-                    
-                    const int list_size = angle_index.size();
-                    int dy, dx, idx;
-                    int old_idx=0;
-                    double length_list[list_size];
-                    double angle_list[list_size];
-
-
-                    for(int i =list_size ; i>1 ; i--){
-                        if (i==list_size){
-                            old_idx=angle_index.top();
-                            angle_index.pop();
+                    for(int i=0; i<stack_size; i++){
+                        yarray[i]=ystack.top();
+                        xarray[i]=xstack.top();
+                        //circle_map.at<uchar>(yarray[i],xarray[i])=255;
+                        if(i>1){
+                            angle_delta_array[i]=angle_map.at<uchar>(yarray[i],xarray[i])-angle_map.at<uchar>(yarray[i-1],xarray[i-1]);
+                        }else{
+                            angle_delta_array[0]=0.0;
                         }
-                    
-                        idx= angle_index.top();
-                        angle_index.pop();
 
-                        angle_list[i]=angle_map.at<uchar>(segment_table[idx][0],segment_table[idx][1])-angle_map.at<uchar>(segment_table[old_idx][0],segment_table[old_idx][1]);
-
-                       // cout<< i <<" " <<list_size<<" "<<idx<<" "<<old_idx<<endl;
-                        
-                        for (int j=idx; j<old_idx; j++){
-                            dy=segment_table[j][0]-segment_table[j+1][0];
-                            dx=segment_table[j][1]-segment_table[j+1][1];
-                            length_list[i]+=sqrt(pow(dx,2)+pow(dy,2));
-                            
-                            //cout<<segment_table[j][0]<<"    "<<segment_table[j][1]<<endl;                        
+                        if (fabs(angle_delta_array[i]) >3){
+                            angle_delta_array[i]=255;
+                            breakpoint.push(i);
                         }
-                        old_idx=idx;
-
-                        cout<<length_list[i]<<"                 "<<angle_list[i]<<endl;
-
+                        ystack.pop();
+                        xstack.pop();
                     }
-                                    cout<<"next"<<endl<<endl;
 
-                }// if stack empty?   
+                    int br_size=breakpoint.size();
+                    int br_array[br_size];
+                    double delta_mean_arr[br_size];
+                    double accum, delta_mean;
 
+                    //accum delta angle between breakpoint 
+                    for(int i=0; i<br_size; i++){
+                        br_array[i]=breakpoint.top();
+                        breakpoint.pop();
+                        if (i>=1){
+                            if((br_array[i-1]-br_array[i]) >5){
+                                accum=0.0;
+                                for(int j=br_array[i]+1; j<(br_array[i-1]); j++ ){
+                                    accum+=angle_delta_array[j];
+                                    //cout<<angle_delta_array[j]<<endl;
+
+//circle_map.at<uchar>(yarray[j],xarray[j])=255;
+//cout<<yarray[j]<<"  "<<xarray[j]<<endl;
+//cout<<angle_delta_array[br_array[i]]<<endl;
+
+                                }
+                                cout<<"qq"<<endl;                               
+                                //cout<<(accum/(br_array[i-1]-br_array[i]))<<endl;
+                                delta_mean_arr[i]=accum/(br_array[i-1]-br_array[i]);
+                                cout<<delta_mean_arr[i]<<endl;
+
+                                for(int j=br_array[i]+1; j<(br_array[i-1]); j++ ){
+                                    //double dev=pow((angle_delta_array[j]-delta_mean),2)/(br_array[i-1]-br_array[i]);
+                                    if (delta_mean_arr[i] == delta_mean_arr[i-1] ){
+                                    circle_map.at<uchar>(yarray[j],xarray[j])=255;
+                                    }
+
+                                    //cout<<dev<<endl;
+
+                                    
+                                                               
+                                } 
+                            }
+                        }
+                    }
+                }
+                cout<<"edge end"<<endl;
             }// if
         }// for inner
     }//for outer
     //cout<<"total line no "<<line_no<<endl;
-    return ed_canvas;
+    return circle_map;
 }
 
 
