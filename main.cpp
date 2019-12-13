@@ -27,9 +27,9 @@ int main(){
     //Mat input_gray_img = imread("lena.jpg",IMREAD_GRAYSCALE);
     //Mat input_gray_img = imread("drug.jpg",IMREAD_GRAYSCALE);
     //Mat input_gray_img = imread("peppers.png",IMREAD_GRAYSCALE);
-    //Mat input_gray_img = imread("coins.jpg",IMREAD_GRAYSCALE);
+    Mat input_gray_img = imread("coins.jpg",IMREAD_GRAYSCALE);
     //Mat input_gray_img = imread("Circles.jpg",IMREAD_GRAYSCALE);
-    Mat input_gray_img = imread("circle2.jpg",IMREAD_GRAYSCALE);
+    //Mat input_gray_img = imread("circle2.jpg",IMREAD_GRAYSCALE);
     
     Mat gauss_result;
     //gaussian(input_gray_img,gauss_result);
@@ -520,18 +520,17 @@ angle at point   100
 
 
 
-                        radius = length_list[i]*angle_accum / (deg_factor);
+                        radius = length_list[i] * deg_factor / arc_angle ;
 
                         //arc_medium_point_y=segment_table[old_idx][0];
                         arc_center_y=segment_table[(old_idx+idx)/2][0];
                         arc_center_x=segment_table[(old_idx+idx)/2][1];
 
 
+
                         circle_center_y=arc_center_y - radius*sin(angle_map.at<uchar>(arc_center_y,arc_center_x)/deg_factor);
                 
                         circle_center_x=arc_center_x + radius*cos(angle_map.at<uchar>(arc_center_y,arc_center_x)/deg_factor);
-
-
                         
                         //by segment
                         for (int j=(idx); j<=old_idx; j++){
@@ -542,7 +541,13 @@ angle at point   100
                             //if (fabs(angle_delta_mean)< 10 && fabs(angle_delta_mean)>circle_threshold ){ 
                                 if(radius >0){//edge_color==125){
 
-                                    circle_map.at<uchar>(segment_table[j][0],segment_table[j][1])=edge_color;
+                                    if (circle_map.at<uchar>(segment_table[j][0],segment_table[j][1])>0)
+                                    {cout<< "skip"<<endl;
+
+                                    }else{
+                                        circle_map.at<uchar>(segment_table[j][0],segment_table[j][1])=edge_color+j;
+                                    }
+
                                     
                                 }
                             //}
@@ -550,35 +555,35 @@ angle at point   100
                         }
 
 
-
-if(arc_center_y >0 && arc_center_y < circle_map.rows && arc_center_x >0 && arc_center_x < circle_map.cols){
-    if(length_list[i]>100 && angle_accum >20){//length_list[i] >0){
-        circle_map.at<uchar>(circle_center_y,circle_center_x)=255;
-        circle_map.at<uchar>(circle_center_y-1,circle_center_x)=255;
-        circle_map.at<uchar>(circle_center_y+1,circle_center_x)=255;
-        circle_map.at<uchar>(circle_center_y,circle_center_x+1)=255;
-        circle_map.at<uchar>(circle_center_y,circle_center_x-1)=255;
-        circle_map.at<uchar>(arc_center_y, arc_center_x)=255;
-
-                        cout<<"old idx :  "<<old_idx<<"   idx :   "<< idx <<"      " << (old_idx+idx)/2<< endl;
-                        cout<<"arc y : " <<arc_center_y<<"   arc x : "<< arc_center_x << endl;
-                        
-                        cout<<"len : "<<length_list[i]<< "     rad : "<<radius<<endl;
-                        cout<<"                                circle cent y : "<< circle_center_y<< "          x:"<< circle_center_x<< endl;
-
-                        cout<<"arc angle : "<<arc_angle<<"  accum : "<<angle_accum<<endl;
-                        cout<<"angle at point   "<<int(angle_map.at<uchar>(arc_center_y,arc_center_x))<<endl<<endl;
+                        if(arc_center_y >0 && arc_center_y < circle_map.rows && arc_center_x >0 && arc_center_x < circle_map.cols){
+                            if(length_list[i]>10 && arc_angle >5){//length_list[i] >0){
+                                circle_map.at<uchar>(circle_center_y,circle_center_x)=255;
+                          
+                                circle_map.at<uchar>(arc_center_y, arc_center_x)=255;
+                                circle_map.at<uchar>(arc_center_y+1, arc_center_x)=255;
+                                circle_map.at<uchar>(arc_center_y-1, arc_center_x)=255;
+                                circle_map.at<uchar>(arc_center_y, arc_center_x+1)=255;
+                                circle_map.at<uchar>(arc_center_y, arc_center_x-1)=255;
+                                //circle(circle_map, Point(arc_center_x, arc_center_y), radius, 255, 1);
 
 
 
 
-    }
-}
+                                cout<<"old idx :  "<<old_idx<<"   idx :   "<< idx <<"      " << (old_idx+idx)/2<< endl;
+                                cout<<"arc y : " <<arc_center_y<<"   arc x : "<< arc_center_x << endl;                        
+                                cout<<"len : "<<length_list[i]<< "     radius : "<<radius<<endl;
+                                cout<<"                                circle cent y : "<< circle_center_y<< "          x:"<< circle_center_x<< endl;
+                                cout<<"arc angle : "<<arc_angle<<"  accum : "<<angle_accum<<endl;
+                                cout<<"angle at point   "<<int(angle_map.at<uchar>(arc_center_y,arc_center_x))<<endl<<endl<<endl;
+
+                            }
+                        }
 
 
                         old_idx=idx;
+                    
                     }
-                
+
                 }// if stack empty   
 
             }// if
