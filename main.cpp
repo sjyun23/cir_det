@@ -31,11 +31,11 @@ int main(){
     double t2 = (double)getTickCount();
 
    //load img
-    //Mat input_gray_img = imread("lena.jpg",IMREAD_GRAYSCALE);
-    //Mat input_gray_img = imread("drug.jpg",IMREAD_GRAYSCALE);
-    //Mat input_gray_img = imread("peppers.png",IMREAD_GRAYSCALE);
-    Mat input_gray_img = imread("coins.jpg",IMREAD_GRAYSCALE);
-    //Mat input_gray_img = imread("circle2.jpg",IMREAD_GRAYSCALE);
+    //Mat input_gray_img = imread("imgs/lena.jpg",IMREAD_GRAYSCALE);
+    //Mat input_gray_img = imread("imgs/drug.jpg",IMREAD_GRAYSCALE);
+    //Mat input_gray_img = imread("imgs/peppers.png",IMREAD_GRAYSCALE);
+    Mat input_gray_img = imread("imgs/coins.jpg",IMREAD_GRAYSCALE);
+    //Mat input_gray_img = imread("imgs/circle2.jpg",IMREAD_GRAYSCALE);
     
     Mat gauss_result;
     //gaussian(input_gray_img,gauss_result);
@@ -528,7 +528,7 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
     
     double distance=0.0;
 
-    circle_map= imread("coins.jpg",IMREAD_GRAYSCALE);
+    circle_map= imread("imgs/coins.jpg",IMREAD_GRAYSCALE);
 
     
     int cnt=0;
