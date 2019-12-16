@@ -7,13 +7,10 @@
 
 #include <opencv2/opencv.hpp>
 #include <iostream>
-
-#include <vector>
 #include <stack>
-#include <algorithm>
 #include <tuple>
 
-#include "circle_table.h"
+
 
 using namespace cv;
 using namespace std;
@@ -52,18 +49,21 @@ int main(){
     Mat anch_canvas, edge_angle_map, circle_map;
     Mat edge_result=edge_drawing(grad_map, nmr_result, anch_canvas, angle_map, edge_angle_map, circle_map, anchor_detail_ratio, circle_threshold);
 
+    //edcircle
+    //edCircle(edge_result, edge_angle_map);
+
     t2 = ((double)getTickCount() - t2) / getTickFrequency();
 
     cout << "time elapesed =  " << t2 << " sec" << endl;
     
-    imshow("gray", input_gray_img);
+    //imshow("gray", input_gray_img);
     //imshow("gaussian", gauss_result);
     //imshow("gradient map", grad_map);
     //imshow("angle map", angle_map);
     //imshow("sobel/prewitt", sob_result);
-    imshow("nonmaxima suppress", nmr_result);
-    imshow("anch map", anch_canvas);
-    imshow("edge map", edge_result);
+    //imshow("nonmaxima suppress", nmr_result);
+    //imshow("anch map", anch_canvas);
+    //imshow("edge map", edge_result);
     imshow("edge-angle map", edge_angle_map);
     imshow("circle map", circle_map);
 
@@ -201,6 +201,7 @@ void sobel(const Mat& image, Mat& sob_result, Mat& nmr_result, Mat& grd_map, Mat
                 }else{
                     nmr_result.at<uchar>(yimage - filterOffset, ximage - filterOffset)=0;
                 }
+                
             }
         }
     }
@@ -243,6 +244,7 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
     int anch_color=255;
     int ypnt, xpnt, ytemp, xtemp, temp_grad, grad_max;
     int direction_y, direction_x, direction_from_y, direction_from_x;
+    int travel_length;
     int idx_y[6]={0}, idx_x[6]={0};
     double angle;
     bool finding_next_anchor;
@@ -251,9 +253,6 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
     stack<int>stack_circle_center_y;
     stack<int>stack_radius;
     stack<int>stack_arc_length;
-
-    vector<circle_table> circle_candi;
-
 
     for(int yinit = anchor_detail_ratio ; yinit< anch_canvas.rows; yinit=yinit+anchor_detail_ratio){
         for(int xinit =anchor_detail_ratio; xinit< anch_canvas.cols; xinit=xinit+anchor_detail_ratio){
@@ -264,6 +263,7 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                 }
 
                 edge_color = edge_color+1;
+                travel_length=1;
 
                 //next step
                 finding_next_anchor = true;
@@ -350,14 +350,12 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
 
                     //if head meets tail, stop.    
                     if(ed_canvas.at<uchar>(ypnt, xpnt)==edge_color){
-                        finding_next_anchor=false;                        
+                        finding_next_anchor=false;
+                        if (travel_length<=2){
+                            ed_canvas.at<uchar>(yinit,xinit)=0;
+                        }
                         break;
                     }
-
-         /*            if(ed_canvas.at<uchar>(ypnt, xpnt)>0){
-                        finding_next_anchor=false;                        
-                        break;
-                    } */
 
                     //make pixel to edge
                     ed_canvas.at<uchar>(ypnt,xpnt)= edge_color;
@@ -365,6 +363,8 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
 
                     ystack_line.push(ypnt);
                     xstack_line.push(xpnt);
+
+                    travel_length++;
 
                     direction_from_y=direction_y*-1;
                     direction_from_x=direction_x*-1;
@@ -476,22 +476,17 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                                 point_list[j-old_idx-1][0]=segment_table[j][0];
                                 point_list[j-old_idx-1][1]=segment_table[j][1];
                                 arc_length+=length_list[j];
-                                //circle_map.at<uchar>(segment_table[j][0],segment_table[j][1])=100;
+                                //circle_map.at<uchar>(segment_table[j][0],segment_table[j][1])=30;
                             }
                             circle_info = circle_fit(point_list, idx-old_idx);
                             circle_center_y = int(get<0>(circle_info));
                             circle_center_x = int(get<1>(circle_info));
                             radius = int(get<2>(circle_info));
 
-                            if (circle_center_y < circle_map.rows && circle_center_x < circle_map.cols){
-                                if (circle_center_y >0 && circle_center_x >0){
-                                    if (arc_length>100 && radius > 10){
-                                        circle_candi.push_back(circle_table(circle_center_y,circle_center_x,radius,arc_length));
-                                        //circle_map.at<uchar>(circle_center_y,circle_center_x)=100;
-                                    }
-                                }
-                            }
+                            //cout<<circle_center_x<<" "<<circle_center_y<<" "<<radius<<" "<<arc_length<<endl;
+
                             old_idx=idx;
+
                         }
 
                     }else if (changepoint_index_size==0){
@@ -502,7 +497,7 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                                 point_list[i][1]=segment_table[i][1];
                                 arc_length+=length_list[i];
 
-                                //circle_map.at<uchar>(segment_table[i][0],segment_table[i][1])=100;
+                                circle_map.at<uchar>(segment_table[i][0],segment_table[i][1])=30;
                         }
                         circle_info = circle_fit(point_list, ypnt_stack_size);
                         circle_center_y = int(get<0>(circle_info));
@@ -510,53 +505,24 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                         radius = int(get<2>(circle_info));
                     }
                     
-                    if (circle_center_y < circle_map.rows && circle_center_x < circle_map.cols){
-                        if (circle_center_y >0 && circle_center_x >0){
-                            if (arc_length>10 && radius > 10){
-                                circle_candi.push_back(circle_table(circle_center_y,circle_center_x,radius,arc_length));
-                                //circle_map.at<uchar>(circle_center_y,circle_center_x)=100;
+                    if (get<0>(circle_info) < circle_map.rows && get<1>(circle_info) < circle_map.cols && get<2>(circle_info) > 5){
+                        if (get<0>(circle_info) >0 && get<1>(circle_info) >0){
+                            
+                            circle_center_y = int(get<0>(circle_info));
+                            circle_center_x = int(get<1>(circle_info));
+                            
+                            if(circle_map.at<uchar>(circle_center_y, circle_center_x)==0){
+                            circle_map.at<uchar>(circle_center_y, circle_center_x)=100;//100;
+                            }else{circle_map.at<uchar>(circle_center_y, circle_center_x)+=10;
                             }
                         }
-                    }                                                   
+                    } 
+                                                   
 
                 }// if stack empty   
             }// if
         }// for inner
     }//for outer
-    sort(circle_candi.begin(), circle_candi.end());
-    //Print(circle_candi);
-    
-    double distance=0.0;
-
-    circle_map= imread("coins.jpg",IMREAD_GRAYSCALE);
-
-    
-    int cnt=0;
-    while(cnt < circle_candi.size()){
-        //integrate near center points and check radius       
-        distance = sqrt(pow((circle_candi[cnt].y_center - circle_candi[cnt+1].y_center),2) + pow((circle_candi[cnt].x_center - circle_candi[cnt+1].x_center),2));
-
-        if (abs(circle_candi[cnt].radius - circle_candi[cnt+1].radius) < 10 && distance <10){
-                if (circle_candi[cnt+1].arc_len !=circle_candi[cnt].arc_len){
-                    circle_candi[cnt+1].arc_len += circle_candi[cnt].arc_len;
-                }
-                circle_candi[cnt+1].y_center = circle_candi[cnt].y_center;
-                circle_candi[cnt+1].x_center = circle_candi[cnt].x_center;
-                circle_candi[cnt+1].radius = circle_candi[cnt].radius;
-                circle_candi.erase(circle_candi.begin()+cnt);
-        }
-        else {  // circle_candi check. if satisfies condition, then draw. and erase
-            if ((circle_candi[cnt].radius * 3.14 )< circle_candi[cnt].arc_len){
-                circle(circle_map, Point(circle_candi[cnt].x_center, circle_candi[cnt].y_center), int(circle_candi[cnt].radius), 255, 3);
-
-            }
-            cnt++;
-            //circle_candi.erase(circle_candi.begin());
-        }
-    }
-
-    //Print(circle_candi);
-
     return ed_canvas;
 }
 
