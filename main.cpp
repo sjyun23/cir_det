@@ -244,20 +244,26 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
     int anch_color=255;
     int ypnt, xpnt, ytemp, xtemp, temp_grad, grad_max;
     int direction_y, direction_x, direction_from_y, direction_from_x;
-    int length;
+    int travel_length;
     int idx_y[6]={0}, idx_x[6]={0};
     double angle;
     bool finding_next_anchor;
 
+    stack<int>stack_circle_center_x;
+    stack<int>stack_circle_center_y;
+    stack<int>stack_radius;
+    stack<int>stack_arc_length;
+
     for(int yinit = anchor_detail_ratio ; yinit< anch_canvas.rows; yinit=yinit+anchor_detail_ratio){
         for(int xinit =anchor_detail_ratio; xinit< anch_canvas.cols; xinit=xinit+anchor_detail_ratio){
             if(anch_canvas.at<uchar>(yinit,xinit)==anch_color){
+
                 if (edge_color > 230){
                     edge_color=40;
                 }
 
                 edge_color = edge_color+1;
-                length=1;
+                travel_length=1;
 
                 //next step
                 finding_next_anchor = true;
@@ -265,14 +271,10 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                 xpnt=xinit;
                 direction_from_y=0;
                 direction_from_x=0;
-                
-                //anch_color=edge_color;
-                //ed_canvas.at<uchar>(yinit,xinit)=anch_color;
-
+            
                 stack<int>ystack_line;
                 stack<int>xstack_line;
-                stack<int>ystack_angle;
-                stack<int>xstack_angle;
+
 
                 while(finding_next_anchor==true){
                    
@@ -349,7 +351,7 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                     //if head meets tail, stop.    
                     if(ed_canvas.at<uchar>(ypnt, xpnt)==edge_color){
                         finding_next_anchor=false;
-                        if (length<=2){
+                        if (travel_length<=2){
                             ed_canvas.at<uchar>(yinit,xinit)=0;
                         }
                         break;
@@ -362,7 +364,7 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                     ystack_line.push(ypnt);
                     xstack_line.push(xpnt);
 
-                    length++;
+                    travel_length++;
 
                     direction_from_y=direction_y*-1;
                     direction_from_x=direction_x*-1;
@@ -495,7 +497,7 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                                 point_list[i][1]=segment_table[i][1];
                                 arc_length+=length_list[i];
 
-                                //circle_map.at<uchar>(segment_table[i][0],segment_table[i][1])=30;
+                                circle_map.at<uchar>(segment_table[i][0],segment_table[i][1])=30;
                         }
                         circle_info = circle_fit(point_list, ypnt_stack_size);
                         circle_center_y = int(get<0>(circle_info));
@@ -508,9 +510,11 @@ Mat edge_drawing(Mat& grad_map, Mat& nmr_result, Mat& anch_canvas, Mat& angle_ma
                             
                             circle_center_y = int(get<0>(circle_info));
                             circle_center_x = int(get<1>(circle_info));
-
+                            
+                            if(circle_map.at<uchar>(circle_center_y, circle_center_x)==0){
                             circle_map.at<uchar>(circle_center_y, circle_center_x)=100;//100;
-                                                        
+                            }else{circle_map.at<uchar>(circle_center_y, circle_center_x)+=10;
+                            }
                         }
                     } 
                                                    
@@ -574,17 +578,4 @@ tuple<double, double, double> circle_fit(int point_list[][2], int length_point_l
     return make_tuple(center_y, center_x, radius);
 }
 
-/* 
-class confirm_circles{
-    int center_y, center_x, radius, arc_length;
 
-public:
-    confirm_circles();
-    void feed_circle_data(int center_y, int center_x, int radius, int arc_length);
-    void return_circle_data();
-};
-
-confirm_circles::confirm_circles(){
-    center_y=0; center_x=0; radius=0; arc_length=0;
-}
- */
